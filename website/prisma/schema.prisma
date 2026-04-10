@@ -1,0 +1,64 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [postgis]
+}
+
+model CityZone {
+  id       Int                     @id @default(autoincrement())
+  name    String
+  zoneType String                  @map("zone_type")
+  geom     Unsupported("geometry")
+
+  @@map("city_zones")
+}
+
+model Vegetation {
+  id   Int                     @id @default(autoincrement())
+  name String
+  geom Unsupported("geometry")
+
+  @@map("vegetation")
+}
+
+model WaterBody {
+  id   Int                     @id @default(autoincrement())
+  name String
+  geom Unsupported("geometry")
+
+  @@map("water_bodies")
+}
+
+model DetectedChange {
+  id   Int                     @id @default(autoincrement())
+  geom Unsupported("geometry")
+
+  @@map("detected_changes")
+}
+
+model compliance_rules {
+  id          Int       @id @default(autoincrement())
+  source_file String?
+  rules       Json?
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model processed_files {
+  id           Int       @id @default(autoincrement())
+  file_key     String?   @unique
+  processed_at DateTime? @default(now()) @db.Timestamp(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model spatial_ref_sys {
+  srid      Int     @id
+  auth_name String? @db.VarChar(256)
+  auth_srid Int?
+  srtext    String? @db.VarChar(2048)
+  proj4text String? @db.VarChar(2048)
+}
