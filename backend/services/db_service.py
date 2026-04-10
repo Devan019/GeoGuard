@@ -83,3 +83,4 @@ def insert_rules(file_key: str, rules: list):
     conn.close()
 
     return inserted_id
+

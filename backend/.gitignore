@@ -57,7 +57,7 @@ tmp/
 temp/
 
 # (optional) keep extracted_compliance_rules JSON 
-!extracted_compliance_rules.json
+# !extracted_compliance_rules.json
 
 # -----------------------------
 # Database / local storage
