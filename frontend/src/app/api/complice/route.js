@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-
 import { uploadPdfToS3 } from "@/lib/s3";
 
-const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_PDF_SIZE_BYTES = 30 * 1024 * 1024;
+
+const FASTAPI_URL = "http://127.0.0.1:8000";
 
 function isPdfFile(file) {
-  if (!file) {
-    return false;
-  }
+  if (!file) return false;
 
   const byMime = file.type === "application/pdf";
   const byName = typeof file.name === "string" && /\.pdf$/i.test(file.name);
@@ -23,21 +22,21 @@ export async function POST(request) {
     if (!(file instanceof File)) {
       return NextResponse.json(
         { error: "Please provide a PDF file in form field 'file'." },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
     if (!isPdfFile(file)) {
       return NextResponse.json(
         { error: "Only PDF files are allowed." },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
     if (file.size > MAX_PDF_SIZE_BYTES) {
       return NextResponse.json(
         { error: "PDF is too large. Max size is 10MB." },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -48,6 +47,20 @@ export async function POST(request) {
       buffer,
       fileName: file.name,
     });
+
+    try {
+      await fetch(`${FASTAPI_URL}/pdf-uploaded`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fileKey: upload.key,
+        }),
+      });
+    } catch (err) {
+      console.error("FastAPI notify failed:", err);
+    }
 
     return NextResponse.json(
       {
@@ -61,8 +74,9 @@ export async function POST(request) {
           resourceType: "object",
         },
       },
-      { status: 201 },
+      { status: 201 }
     );
+
   } catch (error) {
     const message =
       error instanceof Error

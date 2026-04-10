@@ -1,0 +1,564 @@
+{
+  "rules": [
+    {
+      "target_entity": "building",
+      "reference_entity": "industrial site",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "road",
+      "reference_entity": "building",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "settlement",
+      "reference_entity": "health care",
+      "spatial_relation": "max_distance",
+      "threshold_value": 5,
+      "threshold_unit": "km"
+    },
+    {
+      "target_entity": "industrial area",
+      "reference_entity": "settlements",
+      "spatial_relation": "min_distance",
+      "threshold_value": 100,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "industrial area",
+      "reference_entity": "settlements",
+      "spatial_relation": "max_distance",
+      "threshold_value": 300,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "local body",
+      "reference_entity": "existing structures",
+      "spatial_relation": "max_height",
+      "threshold_value": 6,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "SIR",
+      "reference_entity": "boundary",
+      "spatial_relation": "min_area",
+      "threshold_value": 100,
+      "threshold_unit": "sq. km"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 5,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "development",
+      "reference_entity": "water bodies",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "structure",
+      "reference_entity": "fault lines",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "development",
+      "reference_entity": "areas with slope higher than 45\u00b0",
+      "spatial_relation": "prohibited",
+      "threshold_value": 0,
+      "threshold_unit": "degrees"
+    },
+    {
+      "target_entity": "development",
+      "reference_entity": "major drainage lines",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "city project",
+      "reference_entity": "rail station",
+      "spatial_relation": "min_distance",
+      "threshold_value": 800,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "city project",
+      "reference_entity": "bus stop",
+      "spatial_relation": "min_distance",
+      "threshold_value": 400,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "city project",
+      "reference_entity": "public transportation",
+      "spatial_relation": "min_distance",
+      "threshold_value": 400,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "basic amenities",
+      "reference_entity": "residential area",
+      "spatial_relation": "max_distance",
+      "threshold_value": 400,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "hill slope",
+      "spatial_relation": "max_angle",
+      "threshold_value": 45,
+      "threshold_unit": "degrees"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "flood plain",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "roads",
+      "reference_entity": "south sun",
+      "spatial_relation": "orientation",
+      "threshold_value": 90,
+      "threshold_unit": "degrees"
+    },
+    {
+      "target_entity": "cut slopes",
+      "reference_entity": "residential building",
+      "spatial_relation": "max_height",
+      "threshold_value": 5,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 40,
+      "threshold_unit": "ft"
+    },
+    {
+      "target_entity": "industrial_area",
+      "reference_entity": "residential_area",
+      "spatial_relation": "min_distance",
+      "threshold_value": 500,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "street_light",
+      "reference_entity": "street_light",
+      "spatial_relation": "max_distance",
+      "threshold_value": 30,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "industrial_township",
+      "reference_entity": "boundary",
+      "spatial_relation": "min_area",
+      "threshold_value": 10,
+      "threshold_unit": "hectares"
+    },
+    {
+      "target_entity": "road",
+      "reference_entity": "industrial_township",
+      "spatial_relation": "min_width",
+      "threshold_value": 40,
+      "threshold_unit": "ft"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "archaeological monuments",
+      "spatial_relation": "min_distance",
+      "threshold_value": 100,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "township",
+      "reference_entity": "national road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 15,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "recreational facilities",
+      "reference_entity": "residential zone",
+      "spatial_relation": "integration",
+      "threshold_value": null,
+      "threshold_unit": null
+    },
+    {
+      "target_entity": "industrial site",
+      "reference_entity": "residential area",
+      "spatial_relation": "min_distance",
+      "threshold_value": null,
+      "threshold_unit": null
+    },
+    {
+      "target_entity": "industrial site",
+      "reference_entity": "water body",
+      "spatial_relation": "min_distance",
+      "threshold_value": null,
+      "threshold_unit": null
+    },
+    {
+      "target_entity": "public transportation",
+      "reference_entity": "housing",
+      "spatial_relation": "max_distance",
+      "threshold_value": 800,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "public transportation",
+      "reference_entity": "housing",
+      "spatial_relation": "max_distance",
+      "threshold_value": 5,
+      "threshold_unit": "minutes"
+    },
+    {
+      "target_entity": "airport",
+      "reference_entity": "green area",
+      "spatial_relation": "min_distance",
+      "threshold_value": 20,
+      "threshold_unit": "km"
+    },
+    {
+      "target_entity": "telecom tower",
+      "reference_entity": "sensitive area",
+      "spatial_relation": "min_distance",
+      "threshold_value": 100,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "gas pipeline",
+      "reference_entity": "private dwelling",
+      "spatial_relation": "min_distance",
+      "threshold_value": 15,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "gas or oil well",
+      "reference_entity": "protected area",
+      "spatial_relation": "min_distance",
+      "threshold_value": 100,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "water body",
+      "spatial_relation": "min_distance",
+      "threshold_value": 100,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "residential building",
+      "reference_entity": "flood zone",
+      "spatial_relation": "prohibited",
+      "threshold_value": null,
+      "threshold_unit": null
+    },
+    {
+      "target_entity": "power station",
+      "reference_entity": "exclusion zone",
+      "spatial_relation": "area",
+      "threshold_value": 500,
+      "threshold_unit": "ha"
+    },
+    {
+      "target_entity": "plant",
+      "reference_entity": "sterilized zone",
+      "spatial_relation": "area",
+      "threshold_value": 5,
+      "threshold_unit": "km"
+    },
+    {
+      "target_entity": "road",
+      "reference_entity": "building",
+      "spatial_relation": "min_distance",
+      "threshold_value": 50,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "arterial road",
+      "reference_entity": "road",
+      "spatial_relation": "min_width",
+      "threshold_value": 50,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "busway",
+      "reference_entity": "road",
+      "spatial_relation": "min_width",
+      "threshold_value": 4,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "multiple lane busways",
+      "reference_entity": "road",
+      "spatial_relation": "min_width",
+      "threshold_value": 7,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "LRT development",
+      "reference_entity": "road",
+      "spatial_relation": "min_width",
+      "threshold_value": 2,
+      "threshold_unit": "lanes"
+    },
+    {
+      "target_entity": "floor",
+      "reference_entity": "building",
+      "spatial_relation": "min_height",
+      "threshold_value": 400,
+      "threshold_unit": "mm"
+    },
+    {
+      "target_entity": "TOD Influence Zone",
+      "reference_entity": "road",
+      "spatial_relation": "contains",
+      "threshold_value": null,
+      "threshold_unit": null
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 9,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "waterway",
+      "reference_entity": "waterway",
+      "spatial_relation": "min_length",
+      "threshold_value": 50,
+      "threshold_unit": "km"
+    },
+    {
+      "target_entity": "commercial_area",
+      "reference_entity": "overall_area",
+      "spatial_relation": "max_proportion",
+      "threshold_value": 0.2,
+      "threshold_unit": "proportion"
+    },
+    {
+      "target_entity": "ramp",
+      "reference_entity": "horizontal_distance",
+      "spatial_relation": "max_slope",
+      "threshold_value": 12,
+      "threshold_unit": "ratio"
+    },
+    {
+      "target_entity": "public_toilet",
+      "reference_entity": "road",
+      "spatial_relation": "max_distance",
+      "threshold_value": 1,
+      "threshold_unit": "km"
+    },
+    {
+      "target_entity": "treatment_and_disposal_site",
+      "reference_entity": "wastewater_treatment_unit",
+      "spatial_relation": "max_distance",
+      "threshold_value": 30,
+      "threshold_unit": "km"
+    },
+    {
+      "target_entity": "social_amenities",
+      "reference_entity": "residential_area",
+      "spatial_relation": "max_distance",
+      "threshold_value": 800,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "community_garbage_station",
+      "reference_entity": "residential_area",
+      "spatial_relation": "min_area",
+      "threshold_value": 2000,
+      "threshold_unit": "sq. mtrs"
+    },
+    {
+      "target_entity": "residential_area",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 5,
+      "threshold_unit": "minutes"
+    },
+    {
+      "target_entity": "toilets",
+      "reference_entity": "residential_area",
+      "spatial_relation": "max_distance",
+      "threshold_value": 15,
+      "threshold_unit": "minutes"
+    },
+    {
+      "target_entity": "vending_zone",
+      "reference_entity": "residential_area",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "regulated_market",
+      "reference_entity": "residential_area",
+      "spatial_relation": "max_distance",
+      "threshold_value": 5,
+      "threshold_unit": "km"
+    },
+    {
+      "target_entity": "mandi",
+      "reference_entity": "arterial_road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "commercial_activity",
+      "reference_entity": "residential_area",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "recreational_area",
+      "reference_entity": "residential_area",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "technical_education_centre",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "institute",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 0,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 6,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "plot",
+      "reference_entity": "street/road",
+      "spatial_relation": "abut",
+      "threshold_value": null,
+      "threshold_unit": null
+    },
+    {
+      "target_entity": "access road",
+      "reference_entity": "highways and other roads",
+      "spatial_relation": "min_distance",
+      "threshold_value": 52,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "public street/road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 10,
+      "threshold_unit": "kilometers"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 7.5,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 18,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "monument",
+      "spatial_relation": "min_distance",
+      "threshold_value": 100,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 24,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "plot",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 18,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "road",
+      "spatial_relation": "min_distance",
+      "threshold_value": 2.1,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "defence aerodrome",
+      "spatial_relation": "max_distance_from",
+      "threshold_value": 3000,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "road",
+      "spatial_relation": "min_setback",
+      "threshold_value": 15,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "historical site",
+      "spatial_relation": "min_distance",
+      "threshold_value": 200,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "building",
+      "reference_entity": "transportation zone",
+      "spatial_relation": "max_distance_from",
+      "threshold_value": 500,
+      "threshold_unit": "meters"
+    },
+    {
+      "target_entity": "wireless/TV antennas, cooling towers",
+      "reference_entity": "building",
+      "spatial_relation": "min_distance",
+      "threshold_value": 3,
+      "threshold_unit": "meters"
+    }
+  ]
+}
