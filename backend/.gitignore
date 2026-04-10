@@ -1,0 +1,74 @@
+# -----------------------------
+# Python cache / compiled files
+# -----------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# -----------------------------
+# Virtual environments
+# -----------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# -----------------------------
+# Environment variables
+# -----------------------------
+.env
+.env.*
+!.env.example
+
+# -----------------------------
+# Python project files
+# -----------------------------
+.python-version
+*.log
+
+# -----------------------------
+# Build / packaging
+# -----------------------------
+build/
+dist/
+*.egg-info/
+
+# -----------------------------
+# IDE / Editor
+# -----------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# -----------------------------
+# OS files
+# -----------------------------
+.DS_Store
+Thumbs.db
+
+# -----------------------------
+# Test artifacts / temp files
+# -----------------------------
+*.pdf
+*.json
+*.csv
+tmp/
+temp/
+
+# (optional) keep extracted_compliance_rules JSON 
+!extracted_compliance_rules.json
+
+# -----------------------------
+# Database / local storage
+# -----------------------------
+*.db
+*.sqlite3
+
+# -----------------------------
+# Lock files (optional decision)
+# -----------------------------
+# uv.lock
+
+node_modules/
+*.pdf
