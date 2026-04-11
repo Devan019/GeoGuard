@@ -1,6 +1,6 @@
-import { Home, UploadCloud, Clock3 } from "lucide-react";
+import { Home, UploadCloud, Clock3, Layers, Loader2 } from "lucide-react";
 
-export default function MapSidebarNav({ activeTab, onTabChange }) {
+export default function MapSidebarNav({ activeTab, onTabChange, onLoadOverall, overallLoading }) {
   return (
     <nav className="absolute left-6 top-6 z-20 flex flex-col gap-6 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/40 p-4 shadow-2xl">
       <button
@@ -20,6 +20,14 @@ export default function MapSidebarNav({ activeTab, onTabChange }) {
         className={`p-3 rounded-xl transition-all duration-300 ${activeTab === "history" ? "bg-slate-900 text-white shadow-md" : "text-slate-500 hover:bg-white/50 hover:text-slate-900"}`}
       >
         <Clock3 size={22} />
+      </button>
+      <button
+        onClick={onLoadOverall}
+        disabled={overallLoading}
+        title="Load Overall Compliance"
+        className={`p-3 rounded-xl transition-all duration-300 ${overallLoading ? "bg-indigo-100 text-indigo-700" : "text-indigo-700 bg-indigo-50 hover:bg-indigo-100"} disabled:opacity-70`}
+      >
+        {overallLoading ? <Loader2 size={22} className="animate-spin" /> : <Layers size={22} />}
       </button>
     </nav>
   );

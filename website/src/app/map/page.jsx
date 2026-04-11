@@ -196,6 +196,7 @@ export default function MapPage() {
   const [historyItems, setHistoryItems] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [overallLoading, setOverallLoading] = useState(false);
 
   const dominantRaw = normalizeDominantChange(detectData);
   const dominantResult = dominantRaw?.result || "unknown";
@@ -306,6 +307,37 @@ export default function MapPage() {
     setIsDetectionFullscreen(false);
     setActiveTab("home");
     setStatus(`Loaded past detection run #${entry.id}`);
+  };
+
+  const handleLoadOverallCompliance = async () => {
+    setOverallLoading(true);
+    try {
+      const response = await fetch("/api/detections/overall", {
+        method: "GET",
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result?.success || !result?.payload) {
+        throw new Error(result?.error || "Unable to build overall compliance result.");
+      }
+
+      setDetectData({
+        ...result.payload,
+        dominant_change: normalizeDominantChange(result.payload),
+      });
+      setIsDetectionDashboardOpen(true);
+      setIsDetectionFullscreen(false);
+      setActiveTab("home");
+
+      const rate = Number(result?.summary?.compliance_rate);
+      setStatus(
+        `Loaded overall compliance: ${Number.isFinite(rate) ? `${rate.toFixed(2)}%` : "-"} compliant across ${result?.summary?.total_runs || 0} runs`,
+      );
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to build overall compliance result.");
+    } finally {
+      setOverallLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -933,7 +965,12 @@ export default function MapPage() {
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#dce6f0]">
       <div ref={mapContainerRef} className="h-full w-full absolute inset-0" />
-      <MapSidebarNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <MapSidebarNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onLoadOverall={handleLoadOverallCompliance}
+        overallLoading={overallLoading}
+      />
       <UploadPanel activeTab={activeTab} />
       <StatusBadge status={status} />
       <div className="absolute top-4 right-6 z-50">
