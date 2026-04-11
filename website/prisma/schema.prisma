@@ -11,7 +11,7 @@ datasource db {
 
 model CityZone {
   id       Int                     @id @default(autoincrement())
-  name    String
+  name     String
   zoneType String                  @map("zone_type")
   geom     Unsupported("geometry")
 
@@ -39,6 +39,44 @@ model DetectedChange {
   geom Unsupported("geometry")
   type String
   @@map("detected_changes")
+}
+
+model detect_details {
+  id                       Int               @id @default(autoincrement())
+  dominant_result          String?
+  dominant_trend           String?
+  dominant_area_percentage Float?
+  dominant_image_metadata  Json?
+  ai_bucket                String?
+  ai_image_keys            Json?
+  ai_max_confidence        Float?
+  dominant_change          Json?
+  ai_results               Json?
+  payload                  Json?
+  created_at               DateTime?         @default(now()) @db.Timestamp(6)
+  rule_violations          rule_violations[]
+
+  @@index([dominant_result])
+  @@index([created_at])
+  @@map("detect_details")
+}
+
+model rule_violations {
+  id                Int             @id @default(autoincrement())
+  detect_details_id Int?
+  change_id         Int
+  detected_type     String
+  is_compliant      Boolean         @default(false)
+  rule_broken       Json
+  metrics           Json
+  feature_geometry  Json?
+  created_at        DateTime?       @default(now()) @db.Timestamp(6)
+  detect_details    detect_details? @relation(fields: [detect_details_id], references: [id], onDelete: SetNull)
+
+  @@index([detect_details_id])
+  @@index([change_id])
+  @@index([detected_type])
+  @@map("rule_violations")
 }
 
 model compliance_rules {

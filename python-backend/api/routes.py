@@ -1,3 +1,5 @@
+import logging
+import time
 from skimage import exposure
 from services.change_type import get_change_type
 from services.connection_manager import ConnectionManager
@@ -30,7 +32,7 @@ from rasterio.enums import Resampling
 import pystac_client
 import planetary_computer
 
-from services.db_service import get_db
+from services.db_service import get_db, save_detection_details
 from services.inference_helper import process_ai_change_detection
 
 # Matplotlib configuration (CRITICAL for servers)
@@ -303,18 +305,18 @@ def create_rgb_bytes_from_bands(bands):
 
 
 # # final BOSS for testing
-import time
-import logging
 
 # Set up logging configuration at the top of your file
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("satellite-app")
 
+
 @router.post("/inference_local")
 async def inference_local(
     time1_image: UploadFile = File(...),
     time2_image: UploadFile = File(...),
-    bbox_str: str = Form(..., description='e.g., "[72.48, 23.03, 72.54, 23.08]"'),
+    bbox_str: str = Form(...,
+                         description='e.g., "[72.48, 23.03, 72.54, 23.08]"'),
     time1_range: str = Form("2020-01-01"),
     time2_range: str = Form("2024-01-01")
 ):
@@ -334,13 +336,15 @@ async def inference_local(
         t_read_start = time.perf_counter()
         t1_bytes = await time1_image.read()
         t2_bytes = await time2_image.read()
-        logger.info(f" File read complete ({len(t1_bytes)} bytes). Time: {time.perf_counter()-t_read_start:.2f}s")
+        logger.info(
+            f" File read complete ({len(t1_bytes)} bytes). Time: {time.perf_counter()-t_read_start:.2f}s")
 
         # 3. AI Inference
         t_ai_start = time.perf_counter()
         logger.info(f"Running ONNX Inference...")
         ai_data = process_ai_change_detection(t1_bytes, t2_bytes, session)
-        logger.info(f"Inference complete. Max Confidence: {ai_data.get('max_confidence'):.4f}. Time: {time.perf_counter()-t_ai_start:.2f}s")
+        logger.info(
+            f"Inference complete. Max Confidence: {ai_data.get('max_confidence'):.4f}. Time: {time.perf_counter()-t_ai_start:.2f}s")
 
         # 4. Fetching Spectral Bands (The high-latency part)
         t_stac_start = time.perf_counter()
@@ -363,14 +367,15 @@ async def inference_local(
             t1_green=t1_bands['green'], t1_red=t1_bands['red'], t1_nir=t1_bands['nir'], t1_swir=t1_bands['swir'],
             t2_green=t2_bands['green'], t2_red=t2_bands['red'], t2_nir=t2_bands['nir'], t2_swir=t2_bands['swir']
         )
-        logger.info(f" Spectral Class: {detected_type}. Time: {time.perf_counter()-t_type_start:.2f}s")
+        logger.info(
+            f" Spectral Class: {detected_type}. Time: {time.perf_counter()-t_type_start:.2f}s")
 
         # 6. Vectorization & Compliance
         t_vec_start = time.perf_counter()
         logger.info(f" Running Vectorization & PostGIS Compliance...")
-        
+
         vectorize_request = {
-            "raster_mask": ai_data["raster_matrix"], 
+            "raster_mask": ai_data["raster_matrix"],
             "transform": {
                 "west": bbox[0], "north": bbox[3],
                 "xsize": (bbox[2] - bbox[0]) / 256.0,
@@ -379,12 +384,14 @@ async def inference_local(
         }
 
         feature_collection = await vectorize(
-            request=vectorize_request, 
-            db=get_db(), 
-            detected_type=detected_type["result"] if isinstance(detected_type, dict) else detected_type
+            request=vectorize_request,
+            db=get_db(),
+            detected_type=detected_type["result"] if isinstance(
+                detected_type, dict) else detected_type
         )
-        logger.info(f" Vectorization complete. Found {len(feature_collection['features'])} polygons. Time: {time.perf_counter()-t_vec_start:.2f}s")
-        
+        logger.info(
+            f" Vectorization complete. Found {len(feature_collection['features'])} polygons. Time: {time.perf_counter()-t_vec_start:.2f}s")
+
         # 7. Push WebSocket
         data = {
             "feature_collection": feature_collection,
@@ -396,38 +403,52 @@ async def inference_local(
             }
         }
 
-        logger.info(f"data is {data}")
-
         # --- ENHANCED LOGGING ---
         # Calculate how many polygons are actually non-compliant
-        non_compliant_count = sum(1 for f in feature_collection['features'] if not f['properties']['is_compliant'])
-        
+        non_compliant_count = sum(
+            1 for f in feature_collection['features'] if not f['properties']['is_compliant'])
+
         logger.info(f" --- FINAL PAYLOAD SUMMARY ---")
         logger.info(f" Change Type: {detected_type}")
         logger.info(f" Total Polygons: {len(feature_collection['features'])}")
         logger.info(f" Non-Compliant Polygons: {non_compliant_count}")
-        
+
         # Log specific violations for the first few polygons to avoid log spam
         for i, feature in enumerate(feature_collection['features'][:3]):
             props = feature['properties']
             status = "❌ VIOLATION" if not props['is_compliant'] else "✅ COMPLIANT"
-            logger.info(f"  -> Poly {i+1} (ID: {props['change_id']}): {status}")
+            logger.info(
+                f"  -> Poly {i+1} (ID: {props['change_id']}): {status}")
             if props['violations']:
                 for v in props['violations']:
-                    logger.info(f"     ! Rule Broken: {v['rule_broken'].get('spatial_relation')} with {v['rule_broken'].get('reference_entity')}")
+                    logger.info(
+                        f"     ! Rule Broken: {v['rule_broken'].get('spatial_relation')} with {v['rule_broken'].get('reference_entity')}")
 
         logger.info(f" Sending data via WebSocket...")
         await manager.broadcast_json({"event": "NEW_DETECTION", "data": data})
 
+        logger.info(" Persisting detection details to DB...")
+        detect_details_id = save_detection_details(
+            dominant_change=data["dominant_change"],
+            ai_results=data["ai_results"],
+            payload=data,
+        )
+        logger.info(
+            f" Detection persisted with detect_details.id={detect_details_id}")
+
         total_time = time.perf_counter() - start_total
         logger.info(f" SUCCESS. Total Processing Time: {total_time:.2f}s")
-        return {"status": "success", "processing_time": f"{total_time:.2f}s"}
+        return {
+            "status": "success",
+            "processing_time": f"{total_time:.2f}s",
+            "detect_details_id": detect_details_id,
+        }
 
     except Exception as e:
         logger.error(f" CRITICAL SERVER ERROR: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 
 @router.get("/test")
 async def test_endpoint():

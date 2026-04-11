@@ -10,7 +10,8 @@ import StatusBadge from "./components/StatusBadge";
 import ViewModeSwitch from "./components/ViewModeSwitch";
 import DetectionSidePanel from "./components/DetectionSidePanel";
 import DetectionDashboard from "./components/DetectionDashboard";
-import { getSeverityLevel } from "./components/detectionHelpers";
+import PastDetectionsPanel from "./components/PastDetectionsPanel";
+import { getFeatureSeverity, getSeverityLevel } from "./components/detectionHelpers";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 const AHMEDABAD_CENTER = [72.5714, 23.0225];
@@ -182,6 +183,9 @@ export default function MapPage() {
   const [isDetectionDashboardOpen, setIsDetectionDashboardOpen] = useState(false);
   const [isDetectionFullscreen, setIsDetectionFullscreen] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
+  const [historyItems, setHistoryItems] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
 
   const dominantRaw = normalizeDominantChange(detectData);
   const dominantResult = dominantRaw?.result || "unknown";
@@ -249,12 +253,55 @@ export default function MapPage() {
     return unsubscribe;
   }, [receiveMessage]);
 
+  const fetchDetectionHistory = async () => {
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      const response = await fetch("/api/detections/history", {
+        method: "GET",
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || "Unable to load history.");
+      }
+
+      setHistoryItems(Array.isArray(result.history) ? result.history : []);
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : "Unable to load history.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (!mapRef.current || !detectData || features.length === 0 || !mapRef.current.isStyleLoaded()) {
+    if (activeTab !== "history") return;
+    fetchDetectionHistory();
+  }, [activeTab]);
+
+  const handleSelectPastDetection = (entry) => {
+    if (!entry?.payload) return;
+
+    setDetectData({
+      ...entry.payload,
+      dominant_change: normalizeDominantChange(entry.payload),
+    });
+    setIsDetectionDashboardOpen(true);
+    setIsDetectionFullscreen(false);
+    setActiveTab("home");
+    setStatus(`Loaded past detection run #${entry.id}`);
+  };
+
+  useEffect(() => {
+    if (!mapRef.current || !detectData || features.length === 0) {
       return;
     }
 
     const mapInstance = mapRef.current;
+    if (!mapInstance.isStyleLoaded()) {
+      return;
+    }
+
     const layerId = "violation-polygons";
     const sourceId = "violation-source";
     const labelLayerId = "violation-labels";
@@ -269,14 +316,6 @@ export default function MapPage() {
         count++;
       });
       return [sumLng / count, sumLat / count];
-    };
-
-    const getFeatureSeverity = (feature) => {
-      const violationCount = (feature?.properties?.violations || []).length;
-      if (feature?.properties?.is_compliant) return "compliant";
-      if (violationCount > 2) return "high";
-      if (violationCount > 0) return "medium";
-      return "low";
     };
 
     const getRuleLabel = (feature) => {
@@ -582,8 +621,15 @@ export default function MapPage() {
         if (!Array.isArray(coords) || !coords.length) return null;
 
         const [lng, lat] = coords[0];
-        const isCompliant = feature?.properties?.is_compliant;
-        const color = isCompliant ? "#16a34a" : "#dc2626";
+        const severity = getFeatureSeverity(feature);
+        const colorBySeverity = {
+          compliant: "#16a34a",
+          high: "#dc2626",
+          medium: "#f59e0b",
+          low: "#3b82f6",
+        };
+        const color = colorBySeverity[severity] || "#3b82f6";
+        const isCompliant = severity === "compliant";
 
         return {
           lng,
@@ -802,15 +848,42 @@ export default function MapPage() {
   useEffect(() => {
     if (!mapRef.current) return;
 
-    if (viewMode === "globe") {
-      mapRef.current.setStyle(STYLES.satellite);
-      mapRef.current.setProjection("globe");
-      mapRef.current.flyTo({ zoom: 3, pitch: 0, duration: 2000 });
-    } else {
-      mapRef.current.setStyle(viewMode === "satellite" ? STYLES.satellite : STYLES.streets);
-      mapRef.current.setProjection("mercator");
-      mapRef.current.flyTo({ zoom: 14, pitch: 45, duration: 2000 });
-    }
+    const mapInstance = mapRef.current;
+    const targetStyle = viewMode === "globe"
+      ? STYLES.satellite
+      : viewMode === "satellite"
+        ? STYLES.satellite
+        : STYLES.streets;
+
+    const forceOverlayRefresh = () => {
+      setStyleLoadTick((prev) => prev + 1);
+    };
+
+    const onStyleLoad = () => {
+      if (!mapRef.current) return;
+
+      const instance = mapRef.current;
+      if (viewMode === "globe") {
+        instance.setProjection("globe");
+        instance.flyTo({ zoom: 3, pitch: 0, duration: 2000 });
+      } else {
+        instance.setProjection("mercator");
+        instance.flyTo({ zoom: 14, pitch: 45, duration: 2000 });
+      }
+
+      // First refresh right when style becomes available.
+      forceOverlayRefresh();
+    };
+
+    // Second refresh on idle ensures overlays persist even if style internals finish late.
+    mapInstance.once("idle", forceOverlayRefresh);
+    mapInstance.once("style.load", onStyleLoad);
+    mapInstance.setStyle(targetStyle);
+
+    return () => {
+      mapInstance.off("idle", forceOverlayRefresh);
+      mapInstance.off("style.load", onStyleLoad);
+    };
   }, [viewMode]);
 
   return (
@@ -820,8 +893,16 @@ export default function MapPage() {
       <UploadPanel activeTab={activeTab} />
       <StatusBadge status={status} />
       <ViewModeSwitch viewMode={viewMode} onChange={setViewMode} />
+      <PastDetectionsPanel
+        activeTab={activeTab}
+        isLoading={historyLoading}
+        error={historyError}
+        items={historyItems}
+        onRefresh={fetchDetectionHistory}
+        onSelect={handleSelectPastDetection}
+      />
 
-      <div className="absolute bottom-6 left-6 z-30 w-[min(90vw,20rem)] rounded-2xl border border-white/70 bg-white/90 backdrop-blur-md shadow-xl p-4">
+      <div className="absolute bottom-6 right-6 z-30 w-[min(86vw,18rem)] max-h-[46vh] overflow-y-auto rounded-2xl border border-white/70 bg-white/92 backdrop-blur-md shadow-xl p-4">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
           Detection Color Legend
         </p>

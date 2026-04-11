@@ -1,6 +1,6 @@
 import { PanelRightOpen, ChevronRight, ChevronLeft } from "lucide-react";
 import { useState } from "react";
-import { getSeverityColors, getSeverityLevel } from "./detectionHelpers";
+import { getFeatureSeverity, getSeverityColors } from "./detectionHelpers";
 
 export default function DetectionSidePanel({
   isDetectionDashboardOpen,
@@ -28,7 +28,7 @@ export default function DetectionSidePanel({
         {/* Minimize/Expand Button */}
         <button
           onClick={() => setIsMinimized(!isMinimized)}
-          className="absolute top-4 right-4 z-[100] p-2 rounded-lg bg-white/90 hover:bg-white border border-white/60 backdrop-blur-xl shadow-lg transition-all hover:shadow-xl pointer-events-auto"
+          className="absolute top-4 right-4 z-100 p-2 rounded-lg bg-white/90 hover:bg-white border border-white/60 backdrop-blur-xl shadow-lg transition-all hover:shadow-xl pointer-events-auto"
           title={isMinimized ? "Expand" : "Minimize"}
         >
           {isMinimized ? (
@@ -40,7 +40,7 @@ export default function DetectionSidePanel({
 
         {!isMinimized && (
           <>
-            <div className="rounded-2xl bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-xl border border-white/60 p-5 shadow-xl">
+            <div className="rounded-2xl bg-linear-to-br from-white/90 to-white/70 backdrop-blur-xl border border-white/60 p-5 shadow-xl">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
                   📊 Active Violations
@@ -70,7 +70,7 @@ export default function DetectionSidePanel({
               </div>
             </div>
 
-            <div className="flex-1 rounded-2xl bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-xl border border-white/60 p-5 shadow-xl overflow-hidden flex flex-col pointer-events-auto">
+            <div className="flex-1 rounded-2xl bg-linear-to-br from-white/90 to-white/70 backdrop-blur-xl border border-white/60 p-5 shadow-xl overflow-hidden flex flex-col pointer-events-auto">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
                   🔍 Detected Changes
@@ -84,7 +84,7 @@ export default function DetectionSidePanel({
                 <div className="flex-1 overflow-y-auto pr-2 space-y-2">
                   {features.map((feature, idx) => {
                     const featureViolations = feature.properties?.violations || [];
-                    const severityLevel = getSeverityLevel(featureViolations.length);
+                    const severityLevel = getFeatureSeverity(feature);
                     const severityColors = getSeverityColors(severityLevel);
 
                     return (
@@ -127,7 +127,7 @@ export default function DetectionSidePanel({
 
             <button
               onClick={onOpenDashboard}
-              className="rounded-xl bg-gradient-to-r from-slate-800 to-slate-900 text-white font-semibold text-sm py-3 shadow-lg hover:shadow-xl transition-all hover:scale-105 flex items-center justify-center gap-2"
+              className="rounded-xl bg-linear-to-r from-slate-800 to-slate-900 text-white font-semibold text-sm py-3 shadow-lg hover:shadow-xl transition-all hover:scale-105 flex items-center justify-center gap-2"
             >
               <PanelRightOpen size={16} /> Open Dashboard
             </button>
