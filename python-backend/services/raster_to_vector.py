@@ -1,107 +1,117 @@
-import numpy as np
 import json
+import numpy as np
+import traceback
 from rasterio.features import shapes
 from rasterio.transform import from_origin
 from services.query_engine_service import generate_violation_query
-
-# Note: Ensure you pass your DB connection (e.g., Prisma client 'db') into this function
-
+import logging
 
 async def vectorize(request, db, detected_type):
-    # FIX 2: Use dictionary bracket notation instead of dot notation
-    mask_array = np.array(request["raster_mask"], dtype='uint8')
+    try:
+        mask_array = np.array(request["raster_mask"], dtype='uint8')
+        transform = from_origin(
+            west=request["transform"]["west"],
+            north=request["transform"]["north"],
+            xsize=request["transform"]["xsize"],
+            ysize=request["transform"]["ysize"]
+        )
 
-    transform = from_origin(
-        west=request["transform"]["west"],
-        north=request["transform"]["north"],
-        xsize=request["transform"]["xsize"],
-        ysize=request["transform"]["ysize"]
-    )
+        results = list(shapes(mask_array, mask=(mask_array == 1), transform=transform))
+        feature_collection = {"type": "FeatureCollection", "features": []}
 
-    # Extract polygons where the mask is 1
-    results = shapes(mask_array, mask=(mask_array == 1), transform=transform)
+        if not results:
+            return feature_collection
 
+        cur = db.cursor()
+        cur.execute("SELECT rules FROM compliance_rules WHERE rules IS NOT NULL")
+        rules_records = cur.fetchall()
 
-    feature_collection = {
-        "type": "FeatureCollection",
-        "features": []
-    }
+        all_rules = []
+        for record in rules_records:
+            rules_data = record[0]
+            if isinstance(rules_data, str):
+                all_rules.extend(json.loads(rules_data).get('rules', []))
+            else:
+                all_rules.extend(rules_data.get('rules', []))
 
-    # Fetch all compliance rules once before the loop to save DB calls
-    # Adjust this query based on how your Prisma client fetches raw JSON
-    rules_records = await db.query_raw("SELECT rules FROM compliance_rules WHERE rules IS NOT NULL")
+        # Filter rules once outside the polygon loop to save CPU
+        applicable_rules = [r for r in all_rules if r.get('target_entity') == detected_type]
 
-    all_rules = []
-    for record in rules_records:
-        if isinstance(record['rules'], str):
-            all_rules.extend(json.loads(record['rules']).get('rules', []))
-        else:
-            all_rules.extend(record['rules'].get('rules', []))
+        for geom, value in results:
+            geom_json_str = json.dumps(geom)
 
-    for index, (geom, value) in enumerate(results):
-        # 1. Convert the shape dictionary to a GeoJSON string
-        geom_json_str = json.dumps(geom)
+            # Insert detected change
+            insert_query = """
+                INSERT INTO detected_changes (type, geom) 
+                VALUES (%s, ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326), 3857)) 
+                RETURNING id;
+            """
+            cur.execute(insert_query, (detected_type, geom_json_str))
+            change_id = cur.fetchone()[0]
 
-        # 2. Determine the entity type (In production, this comes from the ML model)
-        # It MUST be one of: 'waterbody', 'vegetation', 'industrial', 'residential'
+            found_violations = []
 
-        # 3. Insert into the database applying the 4326 -> 3857 transform
-        insert_query = """
-            INSERT INTO detected_changes (type, geom) 
-            VALUES (
-                $1, 
-                ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON($2), 4326), 3857)
-            ) RETURNING id;
-        """
+            # Loop through rules for THIS specific polygon
+            for rule in applicable_rules:
+                # 1. Validation
+                if rule.get("spatial_relation") in ["min_distance", "max_distance", "min_area", "max_area"]:
+                    if rule.get("threshold_value") is None:
+                        logging.warning(f"Skipping broken rule: {rule.get('id')} - Missing threshold_value")
+                        continue
 
-        # Execute via Prisma Python Client
-        change_record = await db.query_raw(insert_query, detected_type, geom_json_str)
-        change_id = change_record[0]['id']
+                # 2. Table Mapping
+                table_map = {
+                    "waterbody": "water_bodies",
+                    "vegetation": "vegetation",
+                    "industrial": "city_zones",
+                    "residential": "city_zones"
+                }
 
-        # 4. Run the Compliance Engine for this specific change
-        applicable_rules = [r for r in all_rules if r.get(
-            'target_entity') == detected_type]
-        found_violations = []
+                mapped_rule = rule.copy()
+                mapped_rule["reference_entity"] = table_map.get(
+                    rule["reference_entity"], rule["reference_entity"])
 
-        for rule in applicable_rules:
-            # Map rule entities to your actual table names / views
-            table_map = {
-                "waterbody": "water_bodies",
-                "vegetation": "vegetation",
-                # Assuming you created SQL Views for these based on zone_type:
-                "industrial": "city_zones",
-                "residential": "city_zones"
-            }
+                # 3. Generate and Execute SQL
+                sql_query = generate_violation_query(mapped_rule)
+                cur.execute(sql_query, (change_id,))
+                
+                # Fetch results
+                violation_results = cur.fetchall()
 
-            mapped_rule = rule.copy()
-            mapped_rule["reference_entity"] = table_map.get(
-                rule["reference_entity"], rule["reference_entity"])
+                if violation_results:
+                    # If using standard cursor, row is a tuple. 
+                    # If using RealDictCursor, row is a dict.
+                    processed_metrics = []
+                    for v in violation_results:
+                        if hasattr(v, 'items'): # It's a dict
+                            processed_metrics.append(dict(v))
+                        else: # It's a tuple, we just store it as is or map it
+                            processed_metrics.append({"data": list(v)})
 
-            # Generate the SQL
-            sql_query = generate_violation_query(mapped_rule)
+                    found_violations.append({
+                        "rule_broken": rule,
+                        "metrics": processed_metrics
+                    })
 
-            # Execute the generated query against the specific change_id
-            violation_results = await db.query_raw(sql_query, change_id)
+            # 4. Add to Collection
+            feature_collection["features"].append({
+                "type": "Feature",
+                "properties": {
+                    "change_id": change_id,
+                    "detected_type": detected_type,
+                    "violations": found_violations,
+                    "is_compliant": len(found_violations) == 0
+                },
+                "geometry": geom
+            })
 
-            if violation_results:
-                found_violations.append({
-                    "rule_broken": rule,
-                    "metrics": [dict(v) for v in violation_results]
-                })
+        db.commit()
+        cur.close()
+        return feature_collection
 
-        # 5. Build the enriched GeoJSON feature for the frontend
-        feature = {
-            "type": "Feature",
-            "properties": {
-                "change_id": change_id,
-                "detected_type": detected_type,
-                "violations": found_violations,
-                "is_compliant": len(found_violations) == 0
-            },
-            # Return the original 4326 geom to the frontend so Leaflet/Mapbox can draw it
-            "geometry": geom
-        }
-        feature_collection["features"].append(feature)
-
-    
-    return feature_collection
+    except Exception as e:
+        if 'db' in locals() and db:
+            db.rollback()
+        logging.error(f"Vectorization Error: {str(e)}")
+        traceback.print_exc()
+        raise e

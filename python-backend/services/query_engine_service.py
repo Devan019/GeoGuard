@@ -4,6 +4,8 @@ def generate_violation_query(rule):
     relation = rule.get("spatial_relation")
     val = rule.get("threshold_value")
 
+    # Note: Psycopg2 uses %s for parameters. $1 will cause 'UndefinedParameter' errors.
+
     # 1. Proximity Rules (JOIN ON ST_DWithin)
     if relation == "min_distance":
         # Rule: Must be > val. Violation: It is within val.
@@ -18,7 +20,7 @@ def generate_violation_query(rule):
                 {ref} r 
             ON ST_DWithin(c.geom, r.geom, {val})
             WHERE 
-                c.id = $1 AND c.type = '{target}'
+                c.id = %s AND c.type = '{target}'
         """
 
     elif relation == "max_distance":
@@ -31,7 +33,7 @@ def generate_violation_query(rule):
             FROM 
                 detected_changes c
             WHERE 
-                c.id = $1 AND c.type = '{target}'
+                c.id = %s AND c.type = '{target}'
             AND NOT EXISTS (
                 SELECT 1 FROM {ref} r WHERE ST_DWithin(c.geom, r.geom, {val})
             )
@@ -39,8 +41,6 @@ def generate_violation_query(rule):
 
     # 2. Topological Rules (JOIN ON ST_Intersects)
     elif relation in ["intersects", "disjoint"]:
-        # Rule disjoint: Must not touch. Violation: It touches.
-        # Rule intersects (as a restriction): No building in waterbody. Violation: It touches.
         return f"""
             SELECT 
                 c.id AS change_id, 
@@ -52,7 +52,7 @@ def generate_violation_query(rule):
                 {ref} r 
             ON ST_Intersects(c.geom, r.geom)
             WHERE 
-                c.id = $1 AND c.type = '{target}'
+                c.id = %s AND c.type = '{target}'
         """
 
     elif relation == "within":
@@ -65,7 +65,7 @@ def generate_violation_query(rule):
             FROM 
                 detected_changes c
             WHERE 
-                c.id = $1 AND c.type = '{target}'
+                c.id = %s AND c.type = '{target}'
             AND NOT EXISTS (
                 SELECT 1 FROM {ref} r WHERE ST_Within(c.geom, r.geom)
             )
@@ -82,7 +82,7 @@ def generate_violation_query(rule):
             FROM 
                 detected_changes c
             WHERE 
-                c.id = $1 AND c.type = '{target}'
+                c.id = %s AND c.type = '{target}'
             AND ST_Area(c.geom) < {val}
         """
 
@@ -96,7 +96,7 @@ def generate_violation_query(rule):
             FROM 
                 detected_changes c
             WHERE 
-                c.id = $1 AND c.type = '{target}'
+                c.id = %s AND c.type = '{target}'
             AND ST_Area(c.geom) > {val}
         """
 

@@ -302,100 +302,124 @@ def create_rgb_bytes_from_bands(bands):
 
 
 # # final BOSS for testing
+import time
+import logging
+
+# Set up logging configuration at the top of your file
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("satellite-app")
+
 @router.post("/inference_local")
 async def inference_local(
     time1_image: UploadFile = File(...),
     time2_image: UploadFile = File(...),
-    # When sending files, JSON must be sent as stringified Form data
     bbox_str: str = Form(..., description='e.g., "[72.48, 23.03, 72.54, 23.08]"'),
     client_id: str = Form(...),
-
-    time1_range: str = Form("2020-01-01/2020-03-31"),
-    time2_range: str = Form("2024-01-01/2024-03-31")
+    time1_range: str = Form("2020-01-01"),
+    time2_range: str = Form("2024-01-01")
 ):
     if session is None:
+        logger.error(f"[{client_id}] Attempted inference but ML Model is not loaded.")
         raise HTTPException(status_code=503, detail="ML Model not loaded.")
 
-    try:
-        # 1. Parse the stringified bounding box back into a Python list
-        bbox = json.loads(bbox_str)
+    start_total = time.perf_counter()
+    logger.info(f"--- Starting New Detection for Client: {client_id} ---")
 
-        # 2. Read the uploaded JPEGs
+    try:
+        # 1. Parse Bbox
+        bbox = json.loads(bbox_str)
+        logger.info(f"[{client_id}] Parsed BBox: {bbox}")
+
+        # 2. Read Uploaded Files
+        t_read_start = time.perf_counter()
         t1_bytes = await time1_image.read()
         t2_bytes = await time2_image.read()
+        logger.info(f"[{client_id}] File read complete ({len(t1_bytes)} bytes). Time: {time.perf_counter()-t_read_start:.2f}s")
 
-        # 3. RUN ONNX INFERENCE (AI processing & S3 Upload)
+        # 3. AI Inference
+        t_ai_start = time.perf_counter()
+        logger.info(f"[{client_id}] Running ONNX Inference...")
         ai_data = process_ai_change_detection(t1_bytes, t2_bytes, session)
+        logger.info(f"[{client_id}] Inference complete. Max Confidence: {ai_data.get('max_confidence'):.4f}. Time: {time.perf_counter()-t_ai_start:.2f}s")
 
-        # 4. RUN VECTORIZATION
-        # Since the AI resizes images to 256x256, our raster_matrix is 256x256.
-        # We divide the GPS bounds by 256 to find the size of a single pixel.
+        # 4. Fetching Spectral Bands (The high-latency part)
+        t_stac_start = time.perf_counter()
+        logger.info(f"[{client_id}] Fetching spectral bands from Microsoft STAC...")
+        t1_bands = fetch_cropped_bands(bbox, time1_range)
+        t2_bands = fetch_cropped_bands(bbox, time2_range)
+
+        if t1_bands is None or t2_bands is None:
+            missing = "Time 1" if t1_bands is None else "Time 2"
+            logger.warning(f"[{client_id}] STAC API returned None for {missing} in range: {time1_range if t1_bands is None else time2_range}")
+            raise HTTPException(status_code=404, detail=f"No clear images found for {missing}.")
+        
+        logger.info(f"[{client_id}] STAC Data received. Shape: {t1_bands['red'].shape}. Time: {time.perf_counter()-t_stac_start:.2f}s")
+
+        # 5. Detect Change Type
+        t_type_start = time.perf_counter()
+        detected_type = get_change_type(
+            t1_green=t1_bands['green'], t1_red=t1_bands['red'], t1_nir=t1_bands['nir'], t1_swir=t1_bands['swir'],
+            t2_green=t2_bands['green'], t2_red=t2_bands['red'], t2_nir=t2_bands['nir'], t2_swir=t2_bands['swir']
+        )
+        logger.info(f"[{client_id}] Spectral Class: {detected_type}. Time: {time.perf_counter()-t_type_start:.2f}s")
+
+        # 6. Vectorization & Compliance
+        t_vec_start = time.perf_counter()
+        logger.info(f"[{client_id}] Running Vectorization & PostGIS Compliance...")
+        
         vectorize_request = {
             "raster_mask": ai_data["raster_matrix"], 
             "transform": {
-                "west": bbox[0],
-                "north": bbox[3],
+                "west": bbox[0], "north": bbox[3],
                 "xsize": (bbox[2] - bbox[0]) / 256.0,
                 "ysize": (bbox[3] - bbox[1]) / 256.0
             },
         }
 
-        #get all 4-4 types of bands
-        t1_bands = fetch_cropped_bands(bbox, time1_range)
-        t2_bands = fetch_cropped_bands(bbox, time2_range)
-
-        # 2. THE FIX: Catch the empty results before Python crashes!
-        if t1_bands is None:
-            raise HTTPException(
-                status_code=404, 
-                detail=f"STAC API found NO clear images for Time 1 ({time1_range}). Try a wider date range (e.g., 3 months) or change the season."
-            )
-        if t2_bands is None:
-            raise HTTPException(
-                status_code=404, 
-                detail=f"STAC API found NO clear images for Time 2 ({time2_range}). Try a wider date range (e.g., 3 months) or change the season."
-            )
-
-
-        print("Bands fetched for both time periods. Proceeding to change type detection...")
-        print(f"Time 1 - Green mean: {np.mean(t1_bands['green']):.2f}, Red mean: {np.mean(t1_bands['red']):.2f}, NIR mean: {np.mean(t1_bands['nir']):.2f}, SWIR mean: {np.mean(t1_bands['swir']):.2f}")
-        print(f"Time 2 - Green mean: {np.mean(t2_bands['green']):.2f}, Red mean: {np.mean(t2_bands['red']):.2f}, NIR mean: {np.mean(t2_bands['nir']):.2f}, SWIR mean: {np.mean(t2_bands['swir']):.2f}")
-
-        #detect change type
-        detected_type = get_change_type(
-            t1_green= t1_bands['green'], t1_red= t1_bands['red'], t1_nir= t1_bands['nir'], t1_swir= t1_bands['swir'],
-            t2_green= t2_bands['green'], t2_red= t2_bands['red'], t2_nir= t2_bands['nir'], t2_swir= t2_bands['swir']
-        )
-
-        # Vectorize and save to DB
         feature_collection = await vectorize(
             request=vectorize_request, 
-            manager=manager, 
             db=get_db(), 
-            
+            detected_type=detected_type["result"] if isinstance(detected_type, dict) else detected_type
         )
-
-        # 5. Push the complete data to Next.js via WebSocket
+        logger.info(f"[{client_id}] Vectorization complete. Found {len(feature_collection['features'])} polygons. Time: {time.perf_counter()-t_vec_start:.2f}s")
+        
+        # 7. Push WebSocket
         data = {
             "feature_collection": feature_collection,
             "dominant_change": {"dominant_change": detected_type},
             "ai_results": {
-                "bucket": ai_data.get("bucket", "your-bucket"),
+                "bucket": ai_data.get("bucket"),
                 "image_keys": ai_data["image_keys"],
-                "max_confidence": ai_data.get("max_confidence", None)
+                "max_confidence": ai_data.get("max_confidence")
             }
         }
 
-        print(f"Sending data to client {client_id} via WebSocket...")
+        # --- ENHANCED LOGGING ---
+        # Calculate how many polygons are actually non-compliant
+        non_compliant_count = sum(1 for f in feature_collection['features'] if not f['properties']['is_compliant'])
+        
+        logger.info(f"[{client_id}] --- FINAL PAYLOAD SUMMARY ---")
+        logger.info(f"[{client_id}] Change Type: {detected_type}")
+        logger.info(f"[{client_id}] Total Polygons: {len(feature_collection['features'])}")
+        logger.info(f"[{client_id}] Non-Compliant Polygons: {non_compliant_count}")
+        
+        # Log specific violations for the first few polygons to avoid log spam
+        for i, feature in enumerate(feature_collection['features'][:3]):
+            props = feature['properties']
+            status = "❌ VIOLATION" if not props['is_compliant'] else "✅ COMPLIANT"
+            logger.info(f"  -> Poly {i+1} (ID: {props['change_id']}): {status}")
+            if props['violations']:
+                for v in props['violations']:
+                    logger.info(f"     ! Rule Broken: {v['rule_broken'].get('spatial_relation')} with {v['rule_broken'].get('reference_entity')}")
 
-        await manager.send_personal_message({
-            "event": "NEW_DETECTION",
-            "data": data
-        }, client_id)
+        logger.info(f"[{client_id}] Sending data via WebSocket...")
+        await manager.send_personal_message({"event": "NEW_DETECTION", "data": data}, client_id)
 
-        return {"status": "success", "message": "Local images processed and vectorized!"}
+        total_time = time.perf_counter() - start_total
+        logger.info(f"[{client_id}] SUCCESS. Total Processing Time: {total_time:.2f}s")
+        return {"status": "success", "processing_time": f"{total_time:.2f}s"}
 
     except Exception as e:
-        print("\n--- SERVER ERROR ---")
-        traceback.print_exc()
+        logger.error(f"[{client_id}] CRITICAL SERVER ERROR: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
