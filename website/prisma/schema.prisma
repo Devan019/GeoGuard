@@ -37,7 +37,7 @@ model WaterBody {
 model DetectedChange {
   id   Int                     @id @default(autoincrement())
   geom Unsupported("geometry")
-
+  
   @@map("detected_changes")
 }
 
