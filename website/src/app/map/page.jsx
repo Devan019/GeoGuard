@@ -17,8 +17,11 @@ import {
 } from "lucide-react";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-const FALLBACK_CENTER = [77.209, 28.6139];
-
+const AHMEDABAD_CENTER = [72.5714, 23.0225];
+const AHMEDABAD_BOUNDS = [
+  [72.42, 22.95],
+  [72.72, 23.16],
+];
 const STYLES = {
   satellite: "mapbox://styles/mapbox/satellite-streets-v12",
   streets: "mapbox://styles/mapbox/light-v11",
@@ -27,12 +30,8 @@ const STYLES = {
 export default function MapPage() {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
-
-  const [status, setStatus] = useState(
-    "Initializing GeoGuard Spatial Engine...",
-  );
-  const [viewMode, setViewMode] = useState("satellite"); 
-  const [activeTab, setActiveTab] = useState("home"); 
+  const [status, setStatus] = useState("Loading Ahmedabad, Gujarat map...");
+  const [isSatellite, setIsSatellite] = useState(true);
   const { receiveMessage } = useSocket();
 
   // Handle WebSocket Messages
@@ -71,9 +70,9 @@ export default function MapPage() {
         container: mapContainerRef.current,
         style: STYLES.satellite,
         center,
-        zoom: 4, 
-        pitch: 45,
-        projection: "globe", 
+        zoom: 13,
+        minZoom: 11.5,
+        maxBounds: AHMEDABAD_BOUNDS,
       });
 
       mapRef.current.on("style.load", () => {
@@ -93,20 +92,10 @@ export default function MapPage() {
         .setLngLat(center)
         .addTo(mapRef.current);
 
-      setStatus("System Online. Monitoring active zones.");
+      setStatus("Ahmedabad, Gujarat map loaded.");
     };
 
-    if (!("geolocation" in navigator)) {
-      startMap(FALLBACK_CENTER);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) =>
-        startMap([position.coords.longitude, position.coords.latitude]),
-      () => startMap(FALLBACK_CENTER),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    );
+    startMap(AHMEDABAD_CENTER);
 
     return () => {
       if (mapRef.current) {

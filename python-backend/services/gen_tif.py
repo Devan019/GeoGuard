@@ -2,6 +2,7 @@ import pystac_client
 import planetary_computer
 import rasterio
 from rasterio.windows import from_bounds
+import numpy as np
 
 def fetch_cropped_bands(bbox, date_range):
     """Fetches ONLY the requested bounding box from Microsoft's cloud to save memory."""
