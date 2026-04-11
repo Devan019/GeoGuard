@@ -25,6 +25,47 @@ const STYLES = {
 
 const ENABLE_SAMPLE_DETECTION_ON_LOAD = true;
 
+const normalizeDominantChange = (payload) => {
+  const dominantRaw = payload?.dominant_change;
+  if (!dominantRaw) {
+    return null;
+  }
+
+  // Supports both shapes:
+  // 1) dominant_change: { result, trend, area_percentage }
+  // 2) dominant_change: { dominant_change: { result, trend, area_percentage } }
+  const candidate = dominantRaw?.dominant_change || dominantRaw;
+  return {
+    ...candidate,
+    image_metadata: dominantRaw?.image_metadata || candidate?.image_metadata,
+  };
+};
+
+const toTitleCase = (value) =>
+  String(value || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+const formatViolationReason = (violation) => {
+  const rule = violation?.rule_broken || {};
+  const threshold = Number(rule?.threshold_value);
+  const thresholdLabel = Number.isFinite(threshold) ? `${threshold}${rule?.threshold_unit || ""}` : "N/A";
+
+  const metricDistances = (violation?.metrics || [])
+    .map((metric) => Number(metric?.data?.[2]))
+    .filter((value) => Number.isFinite(value));
+  const nearestDistance = metricDistances.length ? Math.min(...metricDistances) : null;
+
+  return {
+    summary: `${toTitleCase(rule?.target_entity)} should be ${rule?.spatial_relation || "within rule"} ${thresholdLabel} from ${toTitleCase(rule?.reference_entity)}.`,
+    nearestDistance,
+    threshold,
+    thresholdUnit: rule?.threshold_unit || "m",
+    referenceEntity: toTitleCase(rule?.reference_entity),
+    spatialRelation: toTitleCase(rule?.spatial_relation),
+  };
+};
+
 const SAMPLE_DETECTION_PAYLOAD = {
   feature_collection: {
     type: "FeatureCollection",
@@ -130,6 +171,9 @@ export default function MapPage() {
   const [activeTab, setActiveTab] = useState("home");
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
+  const centerMarkerRef = useRef(null);
+  const detectionMarkersRef = useRef([]);
+  const [styleLoadTick, setStyleLoadTick] = useState(0);
   const [status, setStatus] = useState("Loading Ahmedabad, Gujarat map...");
   const { receiveMessage } = useSocket();
   const [detectData, setDetectData] = useState(null);
@@ -139,7 +183,7 @@ export default function MapPage() {
   const [isDetectionFullscreen, setIsDetectionFullscreen] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
 
-  const dominantRaw = detectData?.dominant_change || null;
+  const dominantRaw = normalizeDominantChange(detectData);
   const dominantResult = dominantRaw?.result || "unknown";
   const dominantTrend = dominantRaw?.trend || "unknown";
   const dominantAreaPercentage = Number(dominantRaw?.area_percentage);
@@ -167,16 +211,48 @@ export default function MapPage() {
     })),
   );
 
+  const detectionLegendItems = [
+    {
+      key: "compliant",
+      color: "#16a34a",
+      label: "Compliant",
+      meaning: "No rule broken",
+    },
+    {
+      key: "medium",
+      color: "#f59e0b",
+      label: "Violation (Medium)",
+      meaning: "Rule broken with limited instances",
+    },
+    {
+      key: "high",
+      color: "#dc2626",
+      label: "Violation (High)",
+      meaning: "Rule broken with multiple instances",
+    },
+    {
+      key: "low",
+      color: "#3b82f6",
+      label: "Low/Other",
+      meaning: "Detected change with low severity fallback",
+    },
+  ];
+
   useEffect(() => {
     const unsubscribe = receiveMessage("NEW_DETECTION", (payload) => {
-      setDetectData(payload);
+      setDetectData({
+        ...payload,
+        dominant_change: normalizeDominantChange(payload),
+      });
       setIsDetectionDashboardOpen(true);
     });
     return unsubscribe;
   }, [receiveMessage]);
 
   useEffect(() => {
-    if (!mapRef.current || !detectData || features.length === 0) return;
+    if (!mapRef.current || !detectData || features.length === 0 || !mapRef.current.isStyleLoaded()) {
+      return;
+    }
 
     const mapInstance = mapRef.current;
     const layerId = "violation-polygons";
@@ -195,16 +271,45 @@ export default function MapPage() {
       return [sumLng / count, sumLat / count];
     };
 
+    const getFeatureSeverity = (feature) => {
+      const violationCount = (feature?.properties?.violations || []).length;
+      if (feature?.properties?.is_compliant) return "compliant";
+      if (violationCount > 2) return "high";
+      if (violationCount > 0) return "medium";
+      return "low";
+    };
+
+    const getRuleLabel = (feature) => {
+      const firstViolation = feature?.properties?.violations?.[0];
+      if (!firstViolation) return "Compliant";
+
+      const rule = firstViolation?.rule_broken || {};
+      const threshold = Number(rule?.threshold_value);
+      const thresholdLabel = Number.isFinite(threshold)
+        ? `${threshold}${rule?.threshold_unit || ""}`
+        : "Rule";
+
+      return `${toTitleCase(rule?.reference_entity)} ${toTitleCase(
+        rule?.spatial_relation,
+      )} ${thresholdLabel}`;
+    };
+
     const geojson = {
       type: "FeatureCollection",
-      features: features.map((feature) => ({
-        type: "Feature",
-        geometry: feature.geometry,
-        properties: {
-          ...feature.properties,
-          violationCount: (feature.properties?.violations || []).length,
-        },
-      })),
+      features: features.map((feature) => {
+        const violationCount = (feature.properties?.violations || []).length;
+        const severity = getFeatureSeverity(feature);
+        return {
+          type: "Feature",
+          geometry: feature.geometry,
+          properties: {
+            ...feature.properties,
+            violationCount,
+            severity,
+            ruleLabel: getRuleLabel(feature),
+          },
+        };
+      }),
     };
 
     const labelGeojson = {
@@ -218,12 +323,18 @@ export default function MapPage() {
             coordinates: centroid,
           },
           properties: {
-            label: feature.properties?.detected_type || "Unknown",
+            label: `${toTitleCase(feature.properties?.detected_type || "Unknown")} CHG-${feature.properties?.change_id || "-"
+              }`,
+            reason: getRuleLabel(feature),
             changeId: feature.properties?.change_id,
           },
         };
       }),
     };
+
+    let onMouseMove;
+    let onMouseLeave;
+    let onClickFeature;
 
     try {
       if (mapInstance.getLayer(labelLayerId)) {
@@ -245,6 +356,7 @@ export default function MapPage() {
       mapInstance.addSource(sourceId, {
         type: "geojson",
         data: geojson,
+        generateId: true,
       });
 
       mapInstance.addSource(`${sourceId}-labels`, {
@@ -260,8 +372,18 @@ export default function MapPage() {
           "fill-color": [
             "case",
             ["boolean", ["feature-state", "hover"], false],
-            "#ff6b6b",
-            "#ef4444",
+            "#f97316",
+            [
+              "match",
+              ["get", "severity"],
+              "compliant",
+              "#16a34a",
+              "high",
+              "#dc2626",
+              "medium",
+              "#f59e0b",
+              "#3b82f6",
+            ],
           ],
           "fill-opacity": 0.6,
         },
@@ -272,7 +394,17 @@ export default function MapPage() {
         type: "line",
         source: sourceId,
         paint: {
-          "line-color": "#dc2626",
+          "line-color": [
+            "match",
+            ["get", "severity"],
+            "compliant",
+            "#15803d",
+            "high",
+            "#991b1b",
+            "medium",
+            "#b45309",
+            "#1d4ed8",
+          ],
           "line-width": 2,
           "line-opacity": 0.8,
         },
@@ -283,11 +415,12 @@ export default function MapPage() {
         type: "symbol",
         source: `${sourceId}-labels`,
         layout: {
-          "text-field": ["get", "label"],
+          "text-field": ["concat", ["get", "label"], "\n", ["get", "reason"]],
           "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
-          "text-size": 12,
+          "text-size": 11,
           "text-offset": [0, 0],
           "text-anchor": "center",
+          "text-max-width": 10,
         },
         paint: {
           "text-color": "#ffffff",
@@ -298,7 +431,7 @@ export default function MapPage() {
       });
 
       let hoveredFeatureId = null;
-      mapInstance.on("mousemove", layerId, (e) => {
+      onMouseMove = (e) => {
         if (e.features.length > 0) {
           if (hoveredFeatureId !== null) {
             mapInstance.setFeatureState(
@@ -312,9 +445,9 @@ export default function MapPage() {
             { hover: true },
           );
         }
-      });
+      };
 
-      mapInstance.on("mouseleave", layerId, () => {
+      onMouseLeave = () => {
         if (hoveredFeatureId !== null) {
           mapInstance.setFeatureState(
             { source: sourceId, id: hoveredFeatureId },
@@ -322,7 +455,59 @@ export default function MapPage() {
           );
         }
         hoveredFeatureId = null;
-      });
+      };
+
+      onClickFeature = (e) => {
+        const feature = e?.features?.[0];
+        if (!feature) return;
+
+        const props = feature.properties || {};
+        const rawViolations = props.violations;
+        let parsedViolations = rawViolations;
+        if (typeof rawViolations === "string") {
+          try {
+            parsedViolations = JSON.parse(rawViolations);
+          } catch {
+            parsedViolations = [];
+          }
+        }
+        const violationList = Array.isArray(parsedViolations) ? parsedViolations : [];
+
+        const reasons = violationList
+          .slice(0, 3)
+          .map((violation) => {
+            const reason = formatViolationReason(violation);
+            const nearestDistance = Number.isFinite(reason.nearestDistance)
+              ? `${reason.nearestDistance.toFixed(1)}m`
+              : "N/A";
+            return `<li><strong>${reason.referenceEntity}</strong>: ${reason.summary} Nearest observed distance: <strong>${nearestDistance}</strong>.</li>`;
+          })
+          .join("");
+
+        const isCompliant = props.is_compliant === true || props.is_compliant === "true";
+        const complianceBadge = isCompliant
+          ? '<span style="color:#166534;font-weight:700;">Compliant</span>'
+          : '<span style="color:#991b1b;font-weight:700;">Non-compliant</span>';
+
+        const popupHtml = `
+          <div style="max-width:320px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;">
+            <div style="font-weight:700;font-size:13px;margin-bottom:6px;">CHG-${props.change_id || "-"} • ${toTitleCase(props.detected_type || "Unknown")}</div>
+            <div style="font-size:12px;margin-bottom:6px;">Status: ${complianceBadge}</div>
+            <div style="font-size:12px;line-height:1.45;">
+              ${violationList.length ? `<ul style="padding-left:16px;margin:0;">${reasons}</ul>` : "No rule violations found for this detection."}
+            </div>
+          </div>
+        `;
+
+        new mapboxgl.Popup({ closeButton: true })
+          .setLngLat(e.lngLat)
+          .setHTML(popupHtml)
+          .addTo(mapInstance);
+      };
+
+      mapInstance.on("mousemove", layerId, onMouseMove);
+      mapInstance.on("mouseleave", layerId, onMouseLeave);
+      mapInstance.on("click", layerId, onClickFeature);
 
       let minLng = 180;
       let maxLng = -180;
@@ -355,6 +540,15 @@ export default function MapPage() {
 
     return () => {
       if (mapInstance) {
+        if (onMouseMove) {
+          mapInstance.off("mousemove", layerId, onMouseMove);
+        }
+        if (onMouseLeave) {
+          mapInstance.off("mouseleave", layerId, onMouseLeave);
+        }
+        if (onClickFeature) {
+          mapInstance.off("click", layerId, onClickFeature);
+        }
         if (mapInstance.getLayer(labelLayerId)) {
           mapInstance.removeLayer(labelLayerId);
         }
@@ -372,7 +566,71 @@ export default function MapPage() {
         }
       }
     };
-  }, [detectData, features]);
+  }, [detectData, features, styleLoadTick]);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const mapInstance = mapRef.current;
+
+    detectionMarkersRef.current.forEach((marker) => marker.remove());
+    detectionMarkersRef.current = [];
+
+    const markerCandidates = features.length
+      ? features.slice(0, 12).map((feature) => {
+        const coords = feature?.geometry?.coordinates?.[0];
+        if (!Array.isArray(coords) || !coords.length) return null;
+
+        const [lng, lat] = coords[0];
+        const isCompliant = feature?.properties?.is_compliant;
+        const color = isCompliant ? "#16a34a" : "#dc2626";
+
+        return {
+          lng,
+          lat,
+          color,
+          changeId: feature?.properties?.change_id,
+          type: feature?.properties?.detected_type,
+          isCompliant,
+        };
+      }).filter(Boolean)
+      : [
+        {
+          lng: AHMEDABAD_CENTER[0] + 0.008,
+          lat: AHMEDABAD_CENTER[1] + 0.006,
+          color: "#f59e0b",
+          changeId: "SAMPLE",
+          type: "waterbody",
+          isCompliant: false,
+        },
+      ];
+
+    markerCandidates.forEach((item) => {
+      const markerEl = document.createElement("div");
+      markerEl.className = "h-4 w-4 rounded-full border-2 border-white shadow-lg";
+      markerEl.style.backgroundColor = item.color;
+
+      const marker = new mapboxgl.Marker({ element: markerEl })
+        .setLngLat([item.lng, item.lat])
+        .setPopup(
+          new mapboxgl.Popup({ offset: 16 }).setHTML(
+            `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:12px;">
+              <strong>CHG-${item.changeId}</strong><br/>
+              Type: ${toTitleCase(item.type)}<br/>
+              Status: <strong style="color:${item.isCompliant ? "#166534" : "#991b1b"}">${item.isCompliant ? "Compliant" : "Violation"}</strong>
+            </div>`,
+          ),
+        )
+        .addTo(mapInstance);
+
+      detectionMarkersRef.current.push(marker);
+    });
+
+    return () => {
+      detectionMarkersRef.current.forEach((marker) => marker.remove());
+      detectionMarkersRef.current = [];
+    };
+  }, [features, styleLoadTick]);
 
   useEffect(() => {
     if (!ENABLE_SAMPLE_DETECTION_ON_LOAD) {
@@ -380,7 +638,10 @@ export default function MapPage() {
     }
 
     const timer = setTimeout(() => {
-      setDetectData(SAMPLE_DETECTION_PAYLOAD);
+      setDetectData({
+        ...SAMPLE_DETECTION_PAYLOAD,
+        dominant_change: normalizeDominantChange(SAMPLE_DETECTION_PAYLOAD),
+      });
       setIsDetectionDashboardOpen(true);
       setStatus("Sample detection loaded (testing mode)");
     }, 500);
@@ -505,6 +766,7 @@ export default function MapPage() {
       });
 
       mapRef.current.on("style.load", () => {
+        setStyleLoadTick((prev) => prev + 1);
         mapRef.current.setFog({
           color: "rgb(255, 255, 255)",
           "high-color": "rgb(200, 215, 240)",
@@ -516,7 +778,7 @@ export default function MapPage() {
 
       const el = document.createElement("div");
       el.className = "w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg animate-pulse";
-      new mapboxgl.Marker({ element: el }).setLngLat(center).addTo(mapRef.current);
+      centerMarkerRef.current = new mapboxgl.Marker({ element: el }).setLngLat(center).addTo(mapRef.current);
 
       setStatus("Ahmedabad, Gujarat map loaded.");
     };
@@ -524,6 +786,12 @@ export default function MapPage() {
     startMap(AHMEDABAD_CENTER);
 
     return () => {
+      detectionMarkersRef.current.forEach((marker) => marker.remove());
+      detectionMarkersRef.current = [];
+      if (centerMarkerRef.current) {
+        centerMarkerRef.current.remove();
+        centerMarkerRef.current = null;
+      }
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -552,6 +820,35 @@ export default function MapPage() {
       <UploadPanel activeTab={activeTab} />
       <StatusBadge status={status} />
       <ViewModeSwitch viewMode={viewMode} onChange={setViewMode} />
+
+      <div className="absolute bottom-6 left-6 z-30 w-[min(90vw,20rem)] rounded-2xl border border-white/70 bg-white/90 backdrop-blur-md shadow-xl p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+          Detection Color Legend
+        </p>
+        <p className="mt-1 text-[11px] text-slate-500">
+          Colors show compliance status and rule-break severity.
+        </p>
+
+        <div className="mt-3 space-y-2">
+          {detectionLegendItems.map((item) => (
+            <div key={item.key} className="flex items-start gap-2.5">
+              <span
+                className="mt-0.5 h-3.5 w-3.5 rounded-sm border border-slate-200"
+                style={{ backgroundColor: item.color }}
+              />
+              <div>
+                <p className="text-xs font-semibold text-slate-800">{item.label}</p>
+                <p className="text-[11px] text-slate-500">{item.meaning}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-3 text-[10px] text-slate-500">
+          Rule meaning example: Waterbody min distance 400m from residential.
+        </p>
+      </div>
+
       <DetectionSidePanel
         isDetectionDashboardOpen={isDetectionDashboardOpen}
         features={features}
