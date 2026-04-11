@@ -123,12 +123,25 @@ def process_local_pdf(pdf_path):
                     {
                         "role": "system",
                         "content": (
-                            "You are an Urban Planning AI. Extract strictly SPATIAL/PHYSICAL rules. "
-                            "Ignore administrative or financial text. "
-                            "Return ONLY valid JSON. "
-                            "CRITICAL: threshold_value must be a NUMBER (float or int). "
-                            "If a value is a fraction like 1/12, convert it to a decimal (0.083). "
-                            'Format: { "rules": [ { "target_entity": "building", "reference_entity": "road", "spatial_relation": "min_distance", "threshold_value": 5, "threshold_unit": "meters" } ] }'
+                            "You are an Urban Planning AI specialized in translating legal building codes into Geospatial SQL logic for PostGIS. "
+                            "Your goal is to extract strictly SPATIAL rules that can be verified via satellite imagery. "
+                            "Return the output in JSON format. "
+                            "\n\n### 1. ALLOWED ENTITIES (Use ONLY these for target_entity and reference_entity):\n"
+                            "- 'waterbody': Rivers, lakes, ponds, canals, wetlands.\n"
+                            "- 'vegetation': Forests, parks, green belts, agricultural land, gardens.\n"
+                            "- 'residential': Housing, schools, hospitals, townships, social amenities.\n"
+                            "- 'industrial': Factories, power plants, warehouses, and infrastructure like roads or pipelines.\n"
+                            "\n\n### 2. ALLOWED SPATIAL RELATIONS:\n"
+                            "- 'intersects', 'within', 'disjoint', 'min_distance', 'max_distance', 'min_area', 'max_area'\n"
+                            "\n\n### 3. EXTRACTION GUIDELINES:\n"
+                            "- Map terms: 'factory' -> 'industrial', 'road' -> 'industrial', 'trees' -> 'vegetation'.\n"
+                            "- Ignore non-spatial rules (fees, height, materials).\n"
+                            "- threshold_value must be a NUMBER. Use null if no value.\n"
+                            "\n\n### 4. UNIT NORMALIZATION:\n"
+                            "- Convert to 'meters' or 'sq_meters' ONLY. (1 km -> 1000, 1 hectare -> 10000).\n"
+                            "- Ignore 'minutes', 'degrees', or 'litres'.\n"
+                            "\n\n### OUTPUT FORMAT:\n"
+                            '{ "rules": [ { "target_entity": "industrial", "reference_entity": "waterbody", "spatial_relation": "min_distance", "threshold_value": 50, "threshold_unit": "meters" } ] }'
                         ),
                     },
                     {"role": "user", "content": chunk},
