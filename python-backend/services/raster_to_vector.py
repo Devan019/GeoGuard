@@ -4,7 +4,7 @@ from rasterio.features import shapes
 from rasterio.transform import from_origin
 
 
-async def vectorize(request, manager):
+async def vectorize(request, manager: None):
     mask_array = np.array(request.raster_mask, dtype='uint8')
 
     transform = from_origin(
@@ -36,10 +36,10 @@ async def vectorize(request, manager):
 
     # Return the pure GeoJSON dictionary (FastAPI automatically turns this into JSON)
 
-    # 3. PUSH TO NEXT.JS VIA WEBSOCKET!
-    await manager.send_personal_message({
-        "event": "NEW_DETECTION",
-        "data": feature_collection
-    }, request.client_id)
+    # # 3. PUSH TO NEXT.JS VIA WEBSOCKET!
+    # await manager.send_personal_message({
+    #     "event": "NEW_DETECTION",
+    #     "data": feature_collection
+    # }, request.client_id)
 
     return feature_collection

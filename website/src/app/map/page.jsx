@@ -8,7 +8,11 @@ import { useSocket } from "@/context/SocketContext";
 import ComplaintUpload from "./ComplaintUpload";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-const FALLBACK_CENTER = [77.209, 28.6139];
+const AHMEDABAD_CENTER = [72.5714, 23.0225];
+const AHMEDABAD_BOUNDS = [
+  [72.42, 22.95],
+  [72.72, 23.16],
+];
 const STYLES = {
   satellite: "mapbox://styles/mapbox/satellite-streets-v12",
   streets: "mapbox://styles/mapbox/streets-v12",
@@ -17,7 +21,7 @@ const STYLES = {
 export default function MapPage() {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
-  const [status, setStatus] = useState("Requesting location permission...");
+  const [status, setStatus] = useState("Loading Ahmedabad, Gujarat map...");
   const [isSatellite, setIsSatellite] = useState(true);
   const { receiveMessage } = useSocket();
 
@@ -57,6 +61,8 @@ export default function MapPage() {
         style: STYLES.satellite,
         center,
         zoom: 13,
+        minZoom: 11.5,
+        maxBounds: AHMEDABAD_BOUNDS,
       });
 
       mapRef.current.addControl(new mapboxgl.NavigationControl(), "top-right");
@@ -65,28 +71,10 @@ export default function MapPage() {
         .setLngLat(center)
         .addTo(mapRef.current);
 
-      setStatus("Location loaded.");
+      setStatus("Ahmedabad, Gujarat map loaded.");
     };
 
-    if (!("geolocation" in navigator)) {
-      setStatus(
-        "Geolocation is not supported in this browser. Showing default map.",
-      );
-      startMap(FALLBACK_CENTER);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const center = [position.coords.longitude, position.coords.latitude];
-        startMap(center);
-      },
-      () => {
-        setStatus("Location permission denied. Showing default map.");
-        startMap(FALLBACK_CENTER);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    );
+    startMap(AHMEDABAD_CENTER);
 
     return () => {
       if (mapRef.current) {
