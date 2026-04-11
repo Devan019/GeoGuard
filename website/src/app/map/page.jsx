@@ -35,17 +35,12 @@ export default function MapPage() {
   const [status, setStatus] = useState("Loading Ahmedabad, Gujarat map...");
   const [isSatellite, setIsSatellite] = useState(true);
   const { receiveMessage } = useSocket();
+  const [detectData, setdetectData] = useState({})
 
   // Handle WebSocket Messages
   useEffect(() => {
     const unsubscribe = receiveMessage("NEW_DETECTION", (payload) => {
-      if (typeof payload === "string") {
-        setStatus(payload);
-        return;
-      }
-      if (payload?.message) {
-        setStatus(payload.message);
-      }
+      setdetectData(payload)
     });
     return unsubscribe;
   }, [receiveMessage]);
