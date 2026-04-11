@@ -7,18 +7,20 @@ from services.query_engine_service import generate_violation_query
 # Note: Ensure you pass your DB connection (e.g., Prisma client 'db') into this function
 
 
-async def vectorize(request, manager, db):
-    mask_array = np.array(request.raster_mask, dtype='uint8')
+async def vectorize(request, db, detected_type):
+    # FIX 2: Use dictionary bracket notation instead of dot notation
+    mask_array = np.array(request["raster_mask"], dtype='uint8')
 
     transform = from_origin(
-        west=request.transform.west,
-        north=request.transform.north,
-        xsize=request.transform.xsize,
-        ysize=request.transform.ysize
+        west=request["transform"]["west"],
+        north=request["transform"]["north"],
+        xsize=request["transform"]["xsize"],
+        ysize=request["transform"]["ysize"]
     )
 
     # Extract polygons where the mask is 1
     results = shapes(mask_array, mask=(mask_array == 1), transform=transform)
+
 
     feature_collection = {
         "type": "FeatureCollection",
@@ -42,7 +44,6 @@ async def vectorize(request, manager, db):
 
         # 2. Determine the entity type (In production, this comes from the ML model)
         # It MUST be one of: 'waterbody', 'vegetation', 'industrial', 'residential'
-        detected_type = "residential"
 
         # 3. Insert into the database applying the 4326 -> 3857 transform
         insert_query = """
@@ -102,10 +103,5 @@ async def vectorize(request, manager, db):
         }
         feature_collection["features"].append(feature)
 
-    # 6. Push the complete, compliance-checked data to Next.js
-    await manager.send_personal_message({
-        "event": "NEW_DETECTION",
-        "data": feature_collection
-    }, request.client_id)
-
+    
     return feature_collection

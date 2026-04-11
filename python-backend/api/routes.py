@@ -1,12 +1,15 @@
 from skimage import exposure
 from services.change_type import get_change_type
 from services.connection_manager import ConnectionManager
+from services.gen_tif import fetch_cropped_bands
 from services.raster_to_vector import vectorize
 from services.pdf_service import process_pdf_pipeline
-from models.schema import UploadNotification
+from models.schema import FinalInferenceRequest, UploadNotification
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import base64
+
+import json
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Body
 from fastapi.responses import JSONResponse, Response
@@ -27,6 +30,7 @@ import pystac_client
 import planetary_computer
 
 from services.db_service import get_db
+from services.inference_helper import process_ai_change_detection
 
 # Matplotlib configuration (CRITICAL for servers)
 import matplotlib
@@ -45,8 +49,6 @@ print("🧠 Loading ONNX model into memory...")
 session = None
 try:
     session = ort.InferenceSession("best_siamese_unet.onnx")
-    input_name_1 = session.get_inputs()[0].name
-    input_name_2 = session.get_inputs()[1].name
 except Exception as e:
     print(
         f"⚠️ Warning: Could not load ONNX model. ML endpoints will fail. Error: {e}")
@@ -156,63 +158,11 @@ def predict_change(
         t1_bytes = time1_image.file.read()
         t2_bytes = time2_image.file.read()
 
-        # 1. Load images into PIL and Numpy
-        img1_pil = Image.open(io.BytesIO(t1_bytes)).convert(
-            "RGB").resize((256, 256))
-        img2_pil = Image.open(io.BytesIO(t2_bytes)).convert(
-            "RGB").resize((256, 256))
+        # Call your new helper function
+        result_data = process_ai_change_detection(t1_bytes, t2_bytes, session)
 
-        arr1 = np.array(img1_pil)
-        arr2 = np.array(img2_pil)
-
-        # 2. Radiometric Calibration (Match Time 2 to Time 1's lighting/colors)
-        arr2_matched = exposure.match_histograms(
-            arr2, arr1, channel_axis=-1).astype(np.uint8)
-        img2_matched_pil = Image.fromarray(arr2_matched)
-
-        # 3. Preprocess directly from PIL images
-        img1_tensor = preprocess_image(img1_pil)
-        img2_tensor = preprocess_image(img2_matched_pil)
-
-        # 4. Run Inference
-        inputs = {input_name_1: img1_tensor, input_name_2: img2_tensor}
-        outputs = session.run(None, inputs)
-
-        # 5. Safely extract probabilities (Dynamic Sigmoid Fix)
-        prob_map_2d = np.squeeze(outputs[0])
-        if np.min(prob_map_2d) < 0.0 or np.max(prob_map_2d) > 1.0:
-            # Model outputted raw logits, apply sigmoid safely
-            prob_map_2d = 1 / (1 + np.exp(-np.clip(prob_map_2d, -10, 10)))
-
-        max_conf = np.max(prob_map_2d)
-        binary_mask = (prob_map_2d > 0.5).astype(np.uint8) * 255
-
-        # Plotting
-        fig, axes = plt.subplots(1, 4, figsize=(20, 5))
-        axes[0].imshow(img1_pil)
-        axes[0].set_title("Time 1 (Before)")
-        axes[0].axis("off")
-
-        axes[1].imshow(img2_matched_pil)  # Show the color-corrected image
-        axes[1].set_title("Time 2 (Color Matched)")
-        axes[1].axis("off")
-
-        im = axes[2].imshow(prob_map_2d, cmap='jet', vmin=0, vmax=1)
-        axes[2].set_title(f"Confidence Heatmap\n(Max: {max_conf*100:.1f}%)")
-        axes[2].axis("off")
-
-        axes[3].imshow(binary_mask, cmap='gray', vmin=0, vmax=255)
-        axes[3].set_title("Binary Mask (>50% Threshold)")
-        axes[3].axis("off")
-
-        plt.tight_layout()
-
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight')
-        plt.close(fig)
-        buf.seek(0)
-
-        return Response(content=buf.getvalue(), media_type="image/png")
+        # Return it directly as JSON!
+        return JSONResponse(content=result_data)
 
     except Exception as e:
         print("\n--- SERVER ERROR ---")
@@ -220,83 +170,17 @@ def predict_change(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/predict_change_raster")
-def predict_change_raster(
+@router.post("/gen_analyze_bands")
+def gen_analyze_bands(
     time1_image: UploadFile = File(...),
     time2_image: UploadFile = File(...)
 ):
-    if session is None:
-        raise HTTPException(status_code=503, detail="ML Model not loaded.")
-
     try:
         t1_bytes = time1_image.file.read()
         t2_bytes = time2_image.file.read()
 
-        # 1. Load images into PIL and Numpy
-        img1_pil = Image.open(io.BytesIO(t1_bytes)).convert(
-            "RGB").resize((256, 256))
-        img2_pil = Image.open(io.BytesIO(t2_bytes)).convert(
-            "RGB").resize((256, 256))
-
-        arr1 = np.array(img1_pil)
-        arr2 = np.array(img2_pil)
-
-        # 2. Radiometric Calibration
-        arr2_matched = exposure.match_histograms(
-            arr2, arr1, channel_axis=-1).astype(np.uint8)
-        img2_matched_pil = Image.fromarray(arr2_matched)
-
-        # 3. Preprocess directly from PIL images
-        img1_tensor = preprocess_image(img1_pil)
-        img2_tensor = preprocess_image(img2_matched_pil)
-
-        # 4. Run Inference
-        inputs = {input_name_1: img1_tensor, input_name_2: img2_tensor}
-        outputs = session.run(None, inputs)
-
-        # 5. Safely extract probabilities
-        prob_map_2d = np.squeeze(outputs[0])
-        if np.min(prob_map_2d) < 0.0 or np.max(prob_map_2d) > 1.0:
-            prob_map_2d = 1 / (1 + np.exp(-np.clip(prob_map_2d, -10, 10)))
-
-        max_conf = np.max(prob_map_2d)
-
-        # Create Raster Masks
-        ai_raster_mask = (prob_map_2d > 0.5).astype(int)
-        visual_mask = (ai_raster_mask * 255).astype(np.uint8)
-
-        # Plotting
-        fig, axes = plt.subplots(1, 4, figsize=(20, 5))
-        axes[0].imshow(img1_pil)
-        axes[0].set_title("Time 1 (Before)")
-        axes[0].axis("off")
-
-        axes[1].imshow(img2_matched_pil)
-        axes[1].set_title("Time 2 (Color Matched)")
-        axes[1].axis("off")
-
-        im = axes[2].imshow(prob_map_2d, cmap='jet', vmin=0, vmax=1)
-        axes[2].set_title(f"Confidence Heatmap\n(Max: {max_conf*100:.1f}%)")
-        axes[2].axis("off")
-
-        axes[3].imshow(visual_mask, cmap='gray', vmin=0, vmax=255)
-        axes[3].set_title("Binary Mask (>50% Threshold)")
-        axes[3].axis("off")
-
-        plt.tight_layout()
-
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight')
-        plt.close(fig)
-
-        plot_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-
-        return JSONResponse(content={
-            "status": "success",
-            "max_confidence": float(max_conf),
-            "raster_mask": ai_raster_mask.tolist(),
-            "visualization_image": plot_base64
-        })
+        # Call your new helper function
+        return fetch_cropped_bands(t1_bytes, t2_bytes)
 
     except Exception as e:
         print("\n--- SERVER ERROR ---")
@@ -396,49 +280,120 @@ def analyze_separate_bands_final(
     t2_nir: UploadFile = File(...), t2_swir: UploadFile = File(...),
 
 ):
-   return get_change_type(
+    return get_change_type(
         t1_green, t1_red, t1_nir, t1_swir,
         t2_green, t2_red, t2_nir, t2_swir
-        )
+    )
+
+
+# Helper to turn Sentinel-2 scientific arrays into a standard RGB image byte string
+def create_rgb_bytes_from_bands(bands):
+    # Stack Red, Green, Blue
+    rgb = np.dstack((bands['red'], bands['green'], bands['blue']))
+
+    # Sentinel-2 data values usually range from 0 to 10000.
+    # We divide by 3000 to brighten it up, and scale to 255 for a standard image.
+    rgb_8bit = np.clip((rgb / 3000.0) * 255, 0, 255).astype(np.uint8)
+
+    img = Image.fromarray(rgb_8bit)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
 
 # # final BOSS for testing
-@router.post("/inference")
-def inference(
+@router.post("/inference_local")
+async def inference_local(
     time1_image: UploadFile = File(...),
     time2_image: UploadFile = File(...),
-    conversion_request: ConversionRequest = Body(...)
+    # When sending files, JSON must be sent as stringified Form data
+    bbox_str: str = Form(..., description='e.g., "[72.48, 23.03, 72.54, 23.08]"'),
+    client_id: str = Form(...),
 
+    time1_range: str = Form("2020-01-01"),
+    time2_range: str = Form("2024-01-01")
 ):
-    #db instance
-    db = get_db()
-    # step-1 : run inference
     if session is None:
         raise HTTPException(status_code=503, detail="ML Model not loaded.")
 
     try:
-        t1_bytes = time1_image.file.read()
-        t2_bytes = time2_image.file.read()
+        # 1. Parse the stringified bounding box back into a Python list
+        bbox = json.loads(bbox_str)
 
-        img1_tensor = preprocess_image(t1_bytes)
-        img2_tensor = preprocess_image(t2_bytes)
+        # 2. Read the uploaded JPEGs
+        t1_bytes = await time1_image.read()
+        t2_bytes = await time2_image.read()
 
-        inputs = {input_name_1: img1_tensor, input_name_2: img2_tensor}
-        outputs = session.run(None, inputs)
+        # 3. RUN ONNX INFERENCE (AI processing & S3 Upload)
+        ai_data = process_ai_change_detection(t1_bytes, t2_bytes, session)
 
-        change_logits = outputs[0][0]
-        probabilities = safe_sigmoid(change_logits)
+        # 4. RUN VECTORIZATION
+        # Since the AI resizes images to 256x256, our raster_matrix is 256x256.
+        # We divide the GPS bounds by 256 to find the size of a single pixel.
+        vectorize_request = {
+            "raster_mask": ai_data["raster_matrix"], 
+            "transform": {
+                "west": bbox[0],
+                "north": bbox[3],
+                "xsize": (bbox[2] - bbox[0]) / 256.0,
+                "ysize": (bbox[3] - bbox[1]) / 256.0
+            },
+        }
 
-        max_conf = np.max(probabilities)
-        prob_map_2d = np.squeeze(probabilities)
+        #get all 4-4 types of bands
+        t1_bands = fetch_cropped_bands(bbox, time1_range)
+        t2_bands = fetch_cropped_bands(bbox, time2_range)
 
-        # We use .astype(int) so rasterio can read it as normal integers
-        ai_raster_mask = (prob_map_2d > 0.5).astype(int)
+        # 2. THE FIX: Catch the empty results before Python crashes!
+        if t1_bands is None:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"STAC API found NO clear images for Time 1 ({time1_range}). Try a wider date range (e.g., 3 months) or change the season."
+            )
+        if t2_bands is None:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"STAC API found NO clear images for Time 2 ({time2_range}). Try a wider date range (e.g., 3 months) or change the season."
+            )
 
-        # step-2 : convert into vector
-        vector_result = vectorize(conversion_request, manager, db)
 
-        
+        print("Bands fetched for both time periods. Proceeding to change type detection...")
+        print(f"Time 1 - Green mean: {np.mean(t1_bands['green']):.2f}, Red mean: {np.mean(t1_bands['red']):.2f}, NIR mean: {np.mean(t1_bands['nir']):.2f}, SWIR mean: {np.mean(t1_bands['swir']):.2f}")
+        print(f"Time 2 - Green mean: {np.mean(t2_bands['green']):.2f}, Red mean: {np.mean(t2_bands['red']):.2f}, NIR mean: {np.mean(t2_bands['nir']):.2f}, SWIR mean: {np.mean(t2_bands['swir']):.2f}")
+
+        #detect change type
+        detected_type = get_change_type(
+            t1_green= t1_bands['green'], t1_red= t1_bands['red'], t1_nir= t1_bands['nir'], t1_swir= t1_bands['swir'],
+            t2_green= t2_bands['green'], t2_red= t2_bands['red'], t2_nir= t2_bands['nir'], t2_swir= t2_bands['swir']
+        )
+
+        # Vectorize and save to DB
+        feature_collection = await vectorize(
+            request=vectorize_request, 
+            manager=manager, 
+            db=get_db(), 
+            
+        )
+
+        # 5. Push the complete data to Next.js via WebSocket
+        data = {
+            "feature_collection": feature_collection,
+            "dominant_change": {"dominant_change": detected_type},
+            "ai_results": {
+                "bucket": ai_data.get("bucket", "your-bucket"),
+                "image_keys": ai_data["image_keys"],
+                "max_confidence": ai_data.get("max_confidence", None)
+            }
+        }
+
+        print(f"Sending data to client {client_id} via WebSocket...")
+
+        await manager.send_personal_message({
+            "event": "NEW_DETECTION",
+            "data": data
+        }, client_id)
+
+        return {"status": "success", "message": "Local images processed and vectorized!"}
 
     except Exception as e:
         print("\n--- SERVER ERROR ---")
