@@ -1,3 +1,5 @@
+from skimage import exposure
+from services.change_type import get_change_type
 from services.connection_manager import ConnectionManager
 from services.raster_to_vector import vectorize
 from services.pdf_service import process_pdf_pipeline
@@ -24,11 +26,14 @@ from rasterio.enums import Resampling
 import pystac_client
 import planetary_computer
 
+from services.db_service import get_db
+
 # Matplotlib configuration (CRITICAL for servers)
 import matplotlib
 matplotlib.use('Agg')
 
 # Your internal services
+
 
 router = APIRouter()
 manager = ConnectionManager()
@@ -62,10 +67,24 @@ def read_band_from_memory(file_bytes, target_shape=None):
             return data.astype(np.float32)
 
 
-def preprocess_image(image_bytes):
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    img = img.resize((256, 256))
+def preprocess_image(img):
+    """
+    Expects a PIL Image. Resizes, normalizes, and keeps NHWC layout.
+    """
+    img = img.convert("RGB").resize((256, 256))
+
+    # 1. Scale to 0-1
     img_array = np.array(img, dtype=np.float32) / 255.0
+
+    # 2. ImageNet Normalization
+    # Note: If the heatmap is STILL flat blue after this shape fix,
+    # it means the model wasn't trained with ImageNet stats.
+    # If so, comment these next three lines out.
+    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+    img_array = (img_array - mean) / std
+
+    # 3. Add batch dimension -> Shape becomes (1, 256, 256, 3)
     return np.expand_dims(img_array, axis=0)
 
 
@@ -134,31 +153,48 @@ def predict_change(
         raise HTTPException(status_code=503, detail="ML Model not loaded.")
 
     try:
-        # Use .file.read() instead of await .read() since this is a sync function
         t1_bytes = time1_image.file.read()
         t2_bytes = time2_image.file.read()
 
-        img1_tensor = preprocess_image(t1_bytes)
-        img2_tensor = preprocess_image(t2_bytes)
+        # 1. Load images into PIL and Numpy
+        img1_pil = Image.open(io.BytesIO(t1_bytes)).convert(
+            "RGB").resize((256, 256))
+        img2_pil = Image.open(io.BytesIO(t2_bytes)).convert(
+            "RGB").resize((256, 256))
 
+        arr1 = np.array(img1_pil)
+        arr2 = np.array(img2_pil)
+
+        # 2. Radiometric Calibration (Match Time 2 to Time 1's lighting/colors)
+        arr2_matched = exposure.match_histograms(
+            arr2, arr1, channel_axis=-1).astype(np.uint8)
+        img2_matched_pil = Image.fromarray(arr2_matched)
+
+        # 3. Preprocess directly from PIL images
+        img1_tensor = preprocess_image(img1_pil)
+        img2_tensor = preprocess_image(img2_matched_pil)
+
+        # 4. Run Inference
         inputs = {input_name_1: img1_tensor, input_name_2: img2_tensor}
         outputs = session.run(None, inputs)
 
-        change_logits = outputs[0][0]
-        probabilities = safe_sigmoid(change_logits)
+        # 5. Safely extract probabilities (Dynamic Sigmoid Fix)
+        prob_map_2d = np.squeeze(outputs[0])
+        if np.min(prob_map_2d) < 0.0 or np.max(prob_map_2d) > 1.0:
+            # Model outputted raw logits, apply sigmoid safely
+            prob_map_2d = 1 / (1 + np.exp(-np.clip(prob_map_2d, -10, 10)))
 
-        max_conf = np.max(probabilities)
-        prob_map_2d = np.squeeze(probabilities)
+        max_conf = np.max(prob_map_2d)
         binary_mask = (prob_map_2d > 0.5).astype(np.uint8) * 255
 
         # Plotting
         fig, axes = plt.subplots(1, 4, figsize=(20, 5))
-        axes[0].imshow(Image.open(io.BytesIO(t1_bytes)).resize((256, 256)))
+        axes[0].imshow(img1_pil)
         axes[0].set_title("Time 1 (Before)")
         axes[0].axis("off")
 
-        axes[1].imshow(Image.open(io.BytesIO(t2_bytes)).resize((256, 256)))
-        axes[1].set_title("Time 2 (After)")
+        axes[1].imshow(img2_matched_pil)  # Show the color-corrected image
+        axes[1].set_title("Time 2 (Color Matched)")
         axes[1].axis("off")
 
         im = axes[2].imshow(prob_map_2d, cmap='jet', vmin=0, vmax=1)
@@ -196,33 +232,47 @@ def predict_change_raster(
         t1_bytes = time1_image.file.read()
         t2_bytes = time2_image.file.read()
 
-        img1_tensor = preprocess_image(t1_bytes)
-        img2_tensor = preprocess_image(t2_bytes)
+        # 1. Load images into PIL and Numpy
+        img1_pil = Image.open(io.BytesIO(t1_bytes)).convert(
+            "RGB").resize((256, 256))
+        img2_pil = Image.open(io.BytesIO(t2_bytes)).convert(
+            "RGB").resize((256, 256))
 
+        arr1 = np.array(img1_pil)
+        arr2 = np.array(img2_pil)
+
+        # 2. Radiometric Calibration
+        arr2_matched = exposure.match_histograms(
+            arr2, arr1, channel_axis=-1).astype(np.uint8)
+        img2_matched_pil = Image.fromarray(arr2_matched)
+
+        # 3. Preprocess directly from PIL images
+        img1_tensor = preprocess_image(img1_pil)
+        img2_tensor = preprocess_image(img2_matched_pil)
+
+        # 4. Run Inference
         inputs = {input_name_1: img1_tensor, input_name_2: img2_tensor}
         outputs = session.run(None, inputs)
 
-        change_logits = outputs[0][0]
-        probabilities = safe_sigmoid(change_logits)
+        # 5. Safely extract probabilities
+        prob_map_2d = np.squeeze(outputs[0])
+        if np.min(prob_map_2d) < 0.0 or np.max(prob_map_2d) > 1.0:
+            prob_map_2d = 1 / (1 + np.exp(-np.clip(prob_map_2d, -10, 10)))
 
-        max_conf = np.max(probabilities)
-        prob_map_2d = np.squeeze(probabilities)
+        max_conf = np.max(prob_map_2d)
 
-        # 1. CREATE THE RASTER FOR THE VECTORIZER (0s and 1s)
-        # We use .astype(int) so rasterio can read it as normal integers
+        # Create Raster Masks
         ai_raster_mask = (prob_map_2d > 0.5).astype(int)
-
-        # 2. CREATE THE VISUAL MASK FOR PLOTTING (0s and 255s)
         visual_mask = (ai_raster_mask * 255).astype(np.uint8)
 
         # Plotting
         fig, axes = plt.subplots(1, 4, figsize=(20, 5))
-        axes[0].imshow(Image.open(io.BytesIO(t1_bytes)).resize((256, 256)))
+        axes[0].imshow(img1_pil)
         axes[0].set_title("Time 1 (Before)")
         axes[0].axis("off")
 
-        axes[1].imshow(Image.open(io.BytesIO(t2_bytes)).resize((256, 256)))
-        axes[1].set_title("Time 2 (After)")
+        axes[1].imshow(img2_matched_pil)
+        axes[1].set_title("Time 2 (Color Matched)")
         axes[1].axis("off")
 
         im = axes[2].imshow(prob_map_2d, cmap='jet', vmin=0, vmax=1)
@@ -235,15 +285,12 @@ def predict_change_raster(
 
         plt.tight_layout()
 
-        # 3. SAVE IMAGE TO BUFFER
         buf = io.BytesIO()
         plt.savefig(buf, format='png', bbox_inches='tight')
         plt.close(fig)
 
-        # 4. ENCODE IMAGE TO BASE64 STRING
         plot_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
 
-        # 5. RETURN BOTH RASTER AND IMAGE IN JSON
         return JSONResponse(content={
             "status": "success",
             "max_confidence": float(max_conf),
@@ -343,123 +390,28 @@ def analyze_separate_bands(
 
 @router.post("/analyze_separate_bands_final")
 def analyze_separate_bands_final(
-    # 1. NEW: Add a parameter to tell the API what we are looking for!
-    target_change: str = Form(...,
-                              description="Must be 'construction', 'water', or 'vegetation'"),
     t1_green: UploadFile = File(...), t1_red: UploadFile = File(...),
     t1_nir: UploadFile = File(...), t1_swir: UploadFile = File(...),
     t2_green: UploadFile = File(...), t2_red: UploadFile = File(...),
     t2_nir: UploadFile = File(...), t2_swir: UploadFile = File(...),
 
 ):
-    try:
-        # 1. Read Time 1 Bands
-        t1_red_bytes = t1_red.file.read()
-        red_t1 = read_band_from_memory(t1_red_bytes)
-        target_shape = red_t1.shape
-
-        green_t1 = read_band_from_memory(t1_green.file.read(), target_shape)
-        nir_t1 = read_band_from_memory(t1_nir.file.read(), target_shape)
-        swir_t1 = read_band_from_memory(t1_swir.file.read(), target_shape)
-
-        # 2. Read Time 2 Bands
-        red_t2 = read_band_from_memory(t2_red.file.read(), target_shape)
-        green_t2 = read_band_from_memory(t2_green.file.read(), target_shape)
-        nir_t2 = read_band_from_memory(t2_nir.file.read(), target_shape)
-        swir_t2 = read_band_from_memory(t2_swir.file.read(), target_shape)
-
-        # 3. Spectral Math (Fixed NDBI typo here!)
-        eps = 1e-8
-        ndvi_t1 = (nir_t1 - red_t1) / (nir_t1 + red_t1 + eps)
-        ndvi_t2 = (nir_t2 - red_t2) / (nir_t2 + red_t2 + eps)
-
-        ndwi_t1 = (green_t1 - nir_t1) / (green_t1 + nir_t1 + eps)
-        ndwi_t2 = (green_t2 - nir_t2) / (green_t2 + nir_t2 + eps)
-
-        ndbi_t1 = (swir_t1 - nir_t1) / (swir_t1 + nir_t1 + eps)
-        ndbi_t2 = (swir_t2 - nir_t2) / (swir_t2 + nir_t2 + eps)  # Fixed!
-
-        # 4. Deltas
-        d_ndvi = ndvi_t2 - ndvi_t1
-        d_ndwi = ndwi_t2 - ndwi_t1
-        d_ndbi = ndbi_t2 - ndbi_t1
-
-        # 5. Targeted Logic Strategy
-        change_map = np.zeros(target_shape, dtype=np.uint8)
-        plot_color = 'white'
-        plot_label = 'Change Detected'
-
-        if target_change == 'construction':
-            # Vegetation drops AND Building Index rises
-            change_map[(d_ndvi < -0.2) & (d_ndbi >= 0.2)] = 1
-            plot_color = 'red'
-            plot_label = 'New Construction'
-
-        elif target_change == 'water':
-            # Water Index rises significantly (Flooding / New Lakes)
-            change_map[(d_ndwi > 0.2)] = 1
-            plot_color = 'blue'
-            plot_label = 'Water Body Expansion'
-
-        elif target_change == 'vegetation':
-            # Vegetation Index drops significantly (Deforestation / Clearing)
-            change_map[(d_ndvi < -0.2)] = 1
-            plot_color = 'green'
-            plot_label = 'Vegetation Loss'
-
-        else:
-            raise ValueError(
-                "target_change must be 'construction', 'water', or 'vegetation'")
-
-        # 6. Statistics Calculation
-        total = change_map.size
-        changed = np.count_nonzero(change_map)
-
-        if changed > 0:
-            stats = f"{plot_label} Area: {(changed/total)*100:.2f}%"
-        else:
-            stats = f"No {plot_label} detected."
-
-        # 7. Visualization
-        fig, ax = plt.subplots(figsize=(10, 10))
-
-        # Create a binary colormap (Black for 0, Target Color for 1)
-        cmap = matplotlib.colors.ListedColormap(['black', plot_color])
-        ax.imshow(change_map, cmap=cmap)
-
-        ax.set_title(f"Targeted Analysis: {target_change.upper()}")
-        ax.axis('off')
-
-        ax.text(1.02, 0.5, stats, transform=ax.transAxes,
-                bbox=dict(facecolor='white', alpha=0.8))
-
-        patch = mpatches.Patch(color=plot_color, label=plot_label)
-        ax.legend(handles=[patch], loc='lower right')
-
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight')
-        plt.close(fig)
-        buf.seek(0)
-
-        return Response(content=buf.getvalue(), media_type="image/png")
-
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+   return get_change_type(
+        t1_green, t1_red, t1_nir, t1_swir,
+        t2_green, t2_red, t2_nir, t2_swir
+        )
 
 
-# final one route for testing
+# # final BOSS for testing
 @router.post("/inference")
 def inference(
     time1_image: UploadFile = File(...),
     time2_image: UploadFile = File(...),
-    t1_green: UploadFile = File(...), t1_red: UploadFile = File(...),
-    t1_nir: UploadFile = File(...), t1_swir: UploadFile = File(...),
-    t2_green: UploadFile = File(...), t2_red: UploadFile = File(...),
-    t2_nir: UploadFile = File(...), t2_swir: UploadFile = File(...),
     conversion_request: ConversionRequest = Body(...)
 
 ):
+    #db instance
+    db = get_db()
     # step-1 : run inference
     if session is None:
         raise HTTPException(status_code=503, detail="ML Model not loaded.")
@@ -480,24 +432,13 @@ def inference(
         max_conf = np.max(probabilities)
         prob_map_2d = np.squeeze(probabilities)
 
-        
         # We use .astype(int) so rasterio can read it as normal integers
         ai_raster_mask = (prob_map_2d > 0.5).astype(int)
 
-
-        #step-2 : convert into vector
-        vector_result = vectorize(conversion_request, manager=None)
-
-        #step-3 detect the changes
-
+        # step-2 : convert into vector
+        vector_result = vectorize(conversion_request, manager, db)
 
         
-
-        
-    
-
-
-
 
     except Exception as e:
         print("\n--- SERVER ERROR ---")
