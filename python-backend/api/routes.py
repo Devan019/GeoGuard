@@ -1,7 +1,7 @@
 from skimage import exposure
 from services.change_type import get_change_type
 from services.connection_manager import ConnectionManager
-from services.gen_tif import fetch_cropped_bands
+from services.gen_tif import fetch_cropped_bands, fetch_cropped_bands_multithreaded
 from services.raster_to_vector import vectorize
 from services.pdf_service import process_pdf_pipeline
 from models.schema import FinalInferenceRequest, UploadNotification
@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import base64
 
 import json
+import asyncio
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Body
 from fastapi.responses import JSONResponse, Response
@@ -343,16 +344,18 @@ async def inference_local(
 
         # 4. Fetching Spectral Bands (The high-latency part)
         t_stac_start = time.perf_counter()
-        logger.info(f"Fetching spectral bands from Microsoft STAC...")
-        t1_bands = fetch_cropped_bands(bbox, time1_range)
-        t2_bands = fetch_cropped_bands(bbox, time2_range)
-
-        if t1_bands is None or t2_bands is None:
-            missing = "Time 1" if t1_bands is None else "Time 2"
-            logger.warning(f"STAC API returned None for {missing} in range: {time1_range if t1_bands is None else time2_range}")
-            raise HTTPException(status_code=404, detail=f"No clear images found for {missing}.")
+        logger.info(f"Fetching spectral bands concurrently from AWS STAC...")
         
-        logger.info(f"STAC Data received. Shape: {t1_bands['red'].shape}. Time: {time.perf_counter()-t_stac_start:.2f}s")
+        loop = asyncio.get_running_loop()
+        
+        # Run both fetches in the background at the exact same time
+        future1 = loop.run_in_executor(None, fetch_cropped_bands_multithreaded, bbox, time1_range)
+        future2 = loop.run_in_executor(None, fetch_cropped_bands_multithreaded, bbox, time2_range)
+        
+        # Await them both together
+        t1_bands, t2_bands = await asyncio.gather(future1, future2)
+        
+        logger.info(f"STAC Data received. Time: {time.perf_counter()-t_stac_start:.2f}s")
 
         # 5. Detect Change Type
         t_type_start = time.perf_counter()

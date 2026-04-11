@@ -5,6 +5,7 @@ import traceback
 from rasterio.features import shapes
 from rasterio.transform import from_origin
 from services.query_engine_service import generate_violation_query
+from psycopg2.extras import execute_values
 import logging
 
 async def vectorize(request, db, detected_type):
@@ -26,7 +27,7 @@ async def vectorize(request, db, detected_type):
 
         cur = db.cursor()
         
-        # Log rule fetch time
+        # --- Fetch Rules ---
         rule_fetch_start = time.perf_counter()
         cur.execute("SELECT rules FROM compliance_rules WHERE rules IS NOT NULL")
         rules_records = cur.fetchall()
@@ -43,83 +44,80 @@ async def vectorize(request, db, detected_type):
         applicable_rules = [r for r in all_rules if r.get('target_entity') == detected_type]
         logging.info(f"🔍 Found {len(results)} polygons and {len(applicable_rules)} applicable rules.")
 
-        for poly_index, (geom, value) in enumerate(results):
-            poly_start = time.perf_counter()
-            geom_json_str = json.dumps(geom)
+        # --- STEP 1: BULK INSERT ---
+        inserted_features = {} 
+        new_ids = []
 
-            # Insert detected change
-            insert_query = """
-                INSERT INTO detected_changes (type, geom) 
-                VALUES (%s, ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326), 3857)) 
-                RETURNING id;
-            """
-            cur.execute(insert_query, (detected_type, geom_json_str))
-            change_id = cur.fetchone()[0]
+        insert_data = [(detected_type, json.dumps(geom)) for geom, value in results]
 
-            found_violations = []
+        insert_query = """
+            INSERT INTO detected_changes (type, geom) 
+            VALUES %s 
+            RETURNING id;
+        """
 
-            # Loop through rules for THIS specific polygon
-            for rule in applicable_rules:
-                rule_start = time.perf_counter()
-                
-                # 1. Validation
-                if rule.get("spatial_relation") in ["min_distance", "max_distance", "min_area", "max_area"]:
-                    if rule.get("threshold_value") is None:
-                        logging.warning(f"Skipping broken rule: {rule.get('id')} - Missing threshold_value")
-                        continue
-
-                # 2. Table Mapping
-                table_map = {
-                    "waterbody": "water_bodies",
-                    "vegetation": "vegetation",
-                    "industrial": "city_zones",
-                    "residential": "city_zones"
-                }
-
-                mapped_rule = rule.copy()
-                mapped_rule["reference_entity"] = table_map.get(
-                    rule["reference_entity"], rule["reference_entity"])
-
-                # 3. Generate and Execute SQL
-                sql_query = generate_violation_query(mapped_rule)
-                
-                # Time the actual database execution
-                db_exec_start = time.perf_counter()
-                cur.execute(sql_query, (change_id,))
-                violation_results = cur.fetchall()
-                db_exec_end = time.perf_counter()
-
-                if violation_results:
-                    processed_metrics = []
-                    for v in violation_results:
-                        if hasattr(v, 'items'): 
-                            processed_metrics.append(dict(v))
-                        else: 
-                            processed_metrics.append({"data": list(v)})
-
-                    found_violations.append({
-                        "rule_broken": rule,
-                        "metrics": processed_metrics
-                    })
-                
-                rule_end = time.perf_counter()
-                rule_id = rule.get('id', 'UNKNOWN_RULE')
-                # Log the time taken for this specific rule
-                logging.info(f"  -> 📐 Rule '{rule_id}' took {(rule_end - rule_start) * 1000:.2f} ms (DB: {(db_exec_end - db_exec_start) * 1000:.2f} ms)")
-
-            feature_collection["features"].append({
+        template = "(%s, ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326), 3857))"
+        returned_ids = execute_values(cur, insert_query, insert_data, template=template, fetch=True)
+        
+        for idx, (geom, value) in enumerate(results):
+            change_id = returned_ids[idx][0]
+            new_ids.append(change_id)
+            
+            inserted_features[change_id] = {
                 "type": "Feature",
                 "properties": {
                     "change_id": change_id,
                     "detected_type": detected_type,
-                    "violations": found_violations,
-                    "is_compliant": len(found_violations) == 0
+                    "violations": [],
+                    "is_compliant": True 
                 },
                 "geometry": geom
-            })
+            }
+
+        # --- STEP 2: BULK RULE CHECKING ---
+        for rule in applicable_rules:
+            rule_start = time.perf_counter()
             
-            poly_end = time.perf_counter()
-            logging.info(f"✅ Polygon {poly_index + 1}/{len(results)} fully processed in {(poly_end - poly_start):.2f} seconds.")
+            if rule.get("spatial_relation") in ["min_distance", "max_distance", "min_area", "max_area"]:
+                if rule.get("threshold_value") is None:
+                    logging.warning(f"Skipping broken rule: Missing threshold_value")
+                    continue
+
+            table_map = {
+                "waterbody": "water_bodies",
+                "vegetation": "vegetation",
+                "industrial": "city_zones",
+                "residential": "city_zones"
+            }
+
+            mapped_rule = rule.copy()
+            mapped_rule["reference_entity"] = table_map.get(
+                rule["reference_entity"], rule["reference_entity"])
+
+            sql_query = generate_violation_query(mapped_rule)
+            
+            db_exec_start = time.perf_counter()
+            cur.execute(sql_query, (new_ids,))
+            violation_results = cur.fetchall()
+            db_exec_end = time.perf_counter()
+
+            # --- STEP 3: MAP VIOLATIONS BACK ---
+            if violation_results:
+                for v in violation_results:
+                    violating_id = v[0] if isinstance(v, tuple) else v['change_id']
+                    metrics = dict(v) if hasattr(v, 'items') else {"data": list(v)}
+                    
+                    inserted_features[violating_id]["properties"]["violations"].append({
+                        "rule_broken": rule,
+                        "metrics": [metrics]
+                    })
+                    inserted_features[violating_id]["properties"]["is_compliant"] = False
+
+            rule_id = rule.get('id', 'UNKNOWN_RULE')
+            logging.info(f"  -> 📐 Rule '{rule_id}' checked {len(new_ids)} polygons in {(db_exec_end - db_exec_start) * 1000:.2f} ms")
+
+        # Compile final array
+        feature_collection["features"] = list(inserted_features.values())
 
         db.commit()
         cur.close()
