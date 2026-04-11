@@ -1,0 +1,220 @@
+{
+    "dataset": [
+        {
+            "id": 1,
+            "location_name": "GIFT_City_Expansion",
+            "bbox": [
+                72.675,
+                23.155,
+                72.695,
+                23.175
+            ],
+            "before": {
+                "date": "2020-04-07",
+                "image_path": "satellite_images/1_GIFT_City_Expansion_before.png"
+            },
+            "after": {
+                "date": "2026-04-11",
+                "image_path": "satellite_images/1_GIFT_City_Expansion_after.png"
+            }
+        },
+        {
+            "id": 2,
+            "location_name": "Motera_Stadium_Area",
+            "bbox": [
+                72.585,
+                23.085,
+                72.605,
+                23.105
+            ],
+            "before": {
+                "date": "2020-04-07",
+                "image_path": "satellite_images/2_Motera_Stadium_Area_before.png"
+            },
+            "after": {
+                "date": "2026-04-11",
+                "image_path": "satellite_images/2_Motera_Stadium_Area_after.png"
+            }
+        },
+        {
+            "id": 3,
+            "location_name": "Sindhu_Bhavan_Road_Commercial",
+            "bbox": [
+                72.5,
+                23.035,
+                72.525,
+                23.055
+            ],
+            "before": {
+                "date": "2020-04-07",
+                "image_path": "satellite_images/3_Sindhu_Bhavan_Road_Commercial_before.png"
+            },
+            "after": {
+                "date": "2026-04-11",
+                "image_path": "satellite_images/3_Sindhu_Bhavan_Road_Commercial_after.png"
+            }
+        },
+        {
+            "id": 4,
+            "location_name": "South_Bopal_Residential",
+            "bbox": [
+                72.46,
+                23.01,
+                72.485,
+                23.03
+            ],
+            "before": {
+                "date": "2020-04-07",
+                "image_path": "satellite_images/4_South_Bopal_Residential_before.png"
+            },
+            "after": {
+                "date": "2026-04-11",
+                "image_path": "satellite_images/4_South_Bopal_Residential_after.png"
+            }
+        },
+        {
+            "id": 5,
+            "location_name": "Vaishnodevi_Circle",
+            "bbox": [
+                72.535,
+                23.135,
+                72.56,
+                23.155
+            ],
+            "before": {
+                "date": "2020-04-07",
+                "image_path": "satellite_images/5_Vaishnodevi_Circle_before.png"
+            },
+            "after": {
+                "date": "2026-04-11",
+                "image_path": "satellite_images/5_Vaishnodevi_Circle_after.png"
+            }
+        },
+        {
+            "id": 6,
+            "location_name": "Sanand_Industrial_Estate",
+            "bbox": [
+                72.36,
+                22.98,
+                72.4,
+                23.02
+            ],
+            "before": {
+                "date": "2020-04-07",
+                "image_path": "satellite_images/6_Sanand_Industrial_Estate_before.png"
+            },
+            "after": {
+                "date": "2026-04-11",
+                "image_path": "satellite_images/6_Sanand_Industrial_Estate_after.png"
+            }
+        },
+        {
+            "id": 7,
+            "location_name": "Sabarmati_Riverfront_North",
+            "bbox": [
+                72.575,
+                23.055,
+                72.595,
+                23.075
+            ],
+            "before": {
+                "date": "2020-04-07",
+                "image_path": "satellite_images/7_Sabarmati_Riverfront_North_before.png"
+            },
+            "after": {
+                "date": "2026-04-11",
+                "image_path": "satellite_images/7_Sabarmati_Riverfront_North_after.png"
+            }
+        },
+        {
+            "id": 8,
+            "location_name": "Science_City_Development",
+            "bbox": [
+                72.495,
+                23.075,
+                72.52,
+                23.095
+            ],
+            "before": {
+                "date": "2020-04-07",
+                "image_path": "satellite_images/8_Science_City_Development_before.png"
+            },
+            "after": {
+                "date": "2026-04-11",
+                "image_path": "satellite_images/8_Science_City_Development_after.png"
+            }
+        },
+        {
+            "id": 9,
+            "location_name": "Ognaj_Ring_Road",
+            "bbox": [
+                72.495,
+                23.1,
+                72.52,
+                23.12
+            ],
+            "before": {
+                "date": "2020-04-07",
+                "image_path": "satellite_images/9_Ognaj_Ring_Road_before.png"
+            },
+            "after": {
+                "date": "2026-04-11",
+                "image_path": "satellite_images/9_Ognaj_Ring_Road_after.png"
+            }
+        },
+        {
+            "id": 10,
+            "location_name": "Chandkheda_Zundal",
+            "bbox": [
+                72.575,
+                23.115,
+                72.6,
+                23.135
+            ],
+            "before": {
+                "date": "2020-04-07",
+                "image_path": "satellite_images/10_Chandkheda_Zundal_before.png"
+            },
+            "after": {
+                "date": "2026-04-11",
+                "image_path": "satellite_images/10_Chandkheda_Zundal_after.png"
+            }
+        },
+        {
+            "id": 11,
+            "location_name": "Hansol_Airport_Edge",
+            "bbox": [
+                72.62,
+                23.065,
+                72.645,
+                23.085
+            ],
+            "before": {
+                "date": "2020-04-07",
+                "image_path": "satellite_images/11_Hansol_Airport_Edge_before.png"
+            },
+            "after": {
+                "date": "2026-04-11",
+                "image_path": "satellite_images/11_Hansol_Airport_Edge_after.png"
+            }
+        },
+        {
+            "id": 12,
+            "location_name": "Prahlad_Nagar_Makarba",
+            "bbox": [
+                72.49,
+                23.0,
+                72.515,
+                23.02
+            ],
+            "before": {
+                "date": "2020-04-07",
+                "image_path": "satellite_images/12_Prahlad_Nagar_Makarba_before.png"
+            },
+            "after": {
+                "date": "2026-04-11",
+                "image_path": "satellite_images/12_Prahlad_Nagar_Makarba_after.png"
+            }
+        }
+    ]
+}
