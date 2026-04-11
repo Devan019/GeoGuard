@@ -1,5 +1,7 @@
+import base64
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from typing import List
 import traceback
@@ -160,6 +162,79 @@ def predict_change(
         buf.seek(0)
 
         return Response(content=buf.getvalue(), media_type="image/png")
+
+    except Exception as e:
+        print("\n--- SERVER ERROR ---")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/predict_change_raster")
+def predict_change_raster(
+    time1_image: UploadFile = File(...),
+    time2_image: UploadFile = File(...)
+):
+    if session is None:
+        raise HTTPException(status_code=503, detail="ML Model not loaded.")
+        
+    try:
+        t1_bytes = time1_image.file.read()
+        t2_bytes = time2_image.file.read()
+
+        img1_tensor = preprocess_image(t1_bytes)
+        img2_tensor = preprocess_image(t2_bytes)
+
+        inputs = {input_name_1: img1_tensor, input_name_2: img2_tensor}
+        outputs = session.run(None, inputs)
+
+        change_logits = outputs[0][0] 
+        probabilities = safe_sigmoid(change_logits)
+        
+        max_conf = np.max(probabilities)
+        prob_map_2d = np.squeeze(probabilities)
+        
+        # 1. CREATE THE RASTER FOR THE VECTORIZER (0s and 1s)
+        # We use .astype(int) so rasterio can read it as normal integers
+        ai_raster_mask = (prob_map_2d > 0.5).astype(int)
+        
+        # 2. CREATE THE VISUAL MASK FOR PLOTTING (0s and 255s)
+        visual_mask = (ai_raster_mask * 255).astype(np.uint8)
+
+        # Plotting
+        fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+        axes[0].imshow(Image.open(io.BytesIO(t1_bytes)).resize((256, 256)))
+        axes[0].set_title("Time 1 (Before)")
+        axes[0].axis("off")
+        
+        axes[1].imshow(Image.open(io.BytesIO(t2_bytes)).resize((256, 256)))
+        axes[1].set_title("Time 2 (After)")
+        axes[1].axis("off")
+        
+        im = axes[2].imshow(prob_map_2d, cmap='jet', vmin=0, vmax=1)
+        axes[2].set_title(f"Confidence Heatmap\n(Max: {max_conf*100:.1f}%)")
+        axes[2].axis("off")
+        
+        axes[3].imshow(visual_mask, cmap='gray', vmin=0, vmax=255)
+        axes[3].set_title("Binary Mask (>50% Threshold)")
+        axes[3].axis("off")
+        
+        plt.tight_layout()
+
+        # 3. SAVE IMAGE TO BUFFER
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight')
+        plt.close(fig) 
+        
+        # 4. ENCODE IMAGE TO BASE64 STRING
+        plot_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+        # 5. RETURN BOTH RASTER AND IMAGE IN JSON
+        return JSONResponse(content={
+            "status": "success",
+            "max_confidence": float(max_conf),
+            "raster_mask": ai_raster_mask.tolist(), 
+            "visualization_image": plot_base64
+        })
 
     except Exception as e:
         print("\n--- SERVER ERROR ---")
