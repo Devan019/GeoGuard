@@ -4,17 +4,13 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
 import { useSocket } from "@/context/SocketContext";
-import ComplaintUpload from "./ComplaintUpload";
-import {
-  Globe,
-  Map as MapIcon,
-  Layers,
-  UploadCloud,
-  Home,
-  Settings,
-  Activity,
-  AlertTriangle,
-} from "lucide-react";
+import MapSidebarNav from "./components/MapSidebarNav";
+import UploadPanel from "./components/UploadPanel";
+import StatusBadge from "./components/StatusBadge";
+import ViewModeSwitch from "./components/ViewModeSwitch";
+import DetectionSidePanel from "./components/DetectionSidePanel";
+import DetectionDashboard from "./components/DetectionDashboard";
+import { getSeverityLevel } from "./components/detectionHelpers";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 const AHMEDABAD_CENTER = [72.5714, 23.0225];
@@ -27,23 +23,432 @@ const STYLES = {
   streets: "mapbox://styles/mapbox/light-v11",
 };
 
+const ENABLE_SAMPLE_DETECTION_ON_LOAD = false;
+
+const SAMPLE_DETECTION_PAYLOAD = {
+  feature_collection: {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: {
+          change_id: 2206,
+          detected_type: "waterbody",
+          violations: [
+            {
+              rule_broken: {
+                target_entity: "waterbody",
+                threshold_unit: "meters",
+                threshold_value: 400,
+                reference_entity: "residential",
+                spatial_relation: "min_distance",
+              },
+              metrics: [
+                { data: [2206, 302, 372.0526494019343] },
+                { data: [2206, 923, 304.3433378743811] },
+              ],
+            },
+          ],
+          is_compliant: false,
+        },
+        geometry: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [72.58484375, 23.075],
+              [72.58484375, 23.07484375],
+              [72.58500000000001, 23.07484375],
+              [72.58500000000001, 23.075],
+              [72.58484375, 23.075],
+            ],
+          ],
+        },
+      },
+      {
+        type: "Feature",
+        properties: {
+          change_id: 2207,
+          detected_type: "waterbody",
+          violations: [
+            {
+              rule_broken: {
+                target_entity: "waterbody",
+                threshold_unit: "meters",
+                threshold_value: 400,
+                reference_entity: "residential",
+                spatial_relation: "min_distance",
+              },
+              metrics: [{ data: [2207, 918, 391.113131488925] }],
+            },
+          ],
+          is_compliant: false,
+        },
+        geometry: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [72.576015625, 23.075],
+              [72.576015625, 23.074921874999998],
+              [72.57593750000001, 23.074921874999998],
+              [72.57593750000001, 23.07484375],
+              [72.57625, 23.07484375],
+              [72.57625, 23.074921874999998],
+              [72.576171875, 23.074921874999998],
+              [72.576171875, 23.075],
+              [72.576015625, 23.075],
+            ],
+          ],
+        },
+      },
+    ],
+  },
+  dominant_change: {
+    result: "waterbody",
+    trend: "expansion",
+    area_percentage: 14.71,
+    image_metadata: {
+      s3_key:
+        "ai-detections/change_maps/3effe5a31db741af8f14c7dbe29f4c61_aaf82ee3ccb54b408c03624277e4939d.png",
+      bucket: "zennvid",
+      url: "https://zennvid.s3.amazonaws.com/ai-detections/change_maps/3effe5a31db741af8f14c7dbe29f4c61_aaf82ee3ccb54b408c03624277e4939d.png",
+    },
+  },
+  ai_results: {
+    bucket: "zennvid",
+    image_keys: {
+      before: "ai-detections/before_f2d40667a5c145f7856219ae6147473f.png",
+      after: "ai-detections/after_c2d2cca21f25485fabe7fe6ceabba616.png",
+      heatmap: "ai-detections/heatmap_343b593711114af281b6188e007da9fe.png",
+      mask: "ai-detections/mask_f1ab2e986b634053966fcb295200740c.png",
+    },
+    max_confidence: 0.9996289014816284,
+  },
+};
+
 export default function MapPage() {
   const [viewMode, setViewMode] = useState("satellite");
   const [activeTab, setActiveTab] = useState("home");
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const [status, setStatus] = useState("Loading Ahmedabad, Gujarat map...");
-  const [isSatellite, setIsSatellite] = useState(true);
   const { receiveMessage } = useSocket();
-  const [detectData, setdetectData] = useState({})
+  const [detectData, setDetectData] = useState(null);
+  const [imageUrls, setImageUrls] = useState({});
+  const [dominantChangeImageUrl, setDominantChangeImageUrl] = useState(null);
+  const [isDetectionDashboardOpen, setIsDetectionDashboardOpen] = useState(false);
+  const [isDetectionFullscreen, setIsDetectionFullscreen] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
 
-  // Handle WebSocket Messages
+  const dominantRaw = detectData?.dominant_change || null;
+  const dominantResult = dominantRaw?.result || "unknown";
+  const dominantTrend = dominantRaw?.trend || "unknown";
+  const dominantAreaPercentage = Number(dominantRaw?.area_percentage);
+  const hasDominantArea = Number.isFinite(dominantAreaPercentage);
+  const imageKeys = detectData?.ai_results?.image_keys || null;
+  const dominantChangeImageKey = detectData?.dominant_change?.image_metadata?.s3_key || null;
+  const dominantChangeImageBucket =
+    detectData?.dominant_change?.image_metadata?.bucket || detectData?.ai_results?.bucket || null;
+
+  const features = detectData?.feature_collection?.features || detectData?.features || [];
+  const violations = features.flatMap((feature, fIdx) =>
+    (feature?.properties?.violations || []).map((violation, vIdx) => ({
+      featureIndex: fIdx,
+      changeId: feature?.properties?.change_id,
+      detectedType: feature?.properties?.detected_type,
+      isCompliant: feature?.properties?.is_compliant,
+      key: `${feature?.properties?.change_id || "chg"}-${vIdx}`,
+      targetEntity: violation?.rule_broken?.target_entity,
+      threshold: violation?.rule_broken?.threshold_value,
+      thresholdUnit: violation?.rule_broken?.threshold_unit,
+      referenceEntity: violation?.rule_broken?.reference_entity,
+      spatialRelation: violation?.rule_broken?.spatial_relation,
+      metrics: violation?.metrics || [],
+      severityScore: getSeverityLevel((violation?.metrics || []).length),
+    })),
+  );
+
   useEffect(() => {
     const unsubscribe = receiveMessage("NEW_DETECTION", (payload) => {
-      setdetectData(payload)
+      setDetectData(payload);
+      setIsDetectionDashboardOpen(true);
     });
     return unsubscribe;
   }, [receiveMessage]);
+
+  useEffect(() => {
+    if (!mapRef.current || !detectData || features.length === 0) return;
+
+    const mapInstance = mapRef.current;
+    const layerId = "violation-polygons";
+    const sourceId = "violation-source";
+    const labelLayerId = "violation-labels";
+
+    const calculateCentroid = (coordinates) => {
+      let sumLng = 0;
+      let sumLat = 0;
+      let count = 0;
+      coordinates[0].forEach(([lng, lat]) => {
+        sumLng += lng;
+        sumLat += lat;
+        count++;
+      });
+      return [sumLng / count, sumLat / count];
+    };
+
+    const geojson = {
+      type: "FeatureCollection",
+      features: features.map((feature) => ({
+        type: "Feature",
+        geometry: feature.geometry,
+        properties: {
+          ...feature.properties,
+          violationCount: (feature.properties?.violations || []).length,
+        },
+      })),
+    };
+
+    const labelGeojson = {
+      type: "FeatureCollection",
+      features: features.map((feature) => {
+        const centroid = calculateCentroid(feature.geometry.coordinates);
+        return {
+          type: "Feature",
+          geometry: {
+            type: "Point",
+            coordinates: centroid,
+          },
+          properties: {
+            label: feature.properties?.detected_type || "Unknown",
+            changeId: feature.properties?.change_id,
+          },
+        };
+      }),
+    };
+
+    try {
+      if (mapInstance.getLayer(labelLayerId)) {
+        mapInstance.removeLayer(labelLayerId);
+      }
+      if (mapInstance.getLayer(layerId)) {
+        mapInstance.removeLayer(layerId);
+      }
+      if (mapInstance.getLayer(`${layerId}-outline`)) {
+        mapInstance.removeLayer(`${layerId}-outline`);
+      }
+      if (mapInstance.getSource(sourceId)) {
+        mapInstance.removeSource(sourceId);
+      }
+      if (mapInstance.getSource(`${sourceId}-labels`)) {
+        mapInstance.removeSource(`${sourceId}-labels`);
+      }
+
+      mapInstance.addSource(sourceId, {
+        type: "geojson",
+        data: geojson,
+      });
+
+      mapInstance.addSource(`${sourceId}-labels`, {
+        type: "geojson",
+        data: labelGeojson,
+      });
+
+      mapInstance.addLayer({
+        id: layerId,
+        type: "fill",
+        source: sourceId,
+        paint: {
+          "fill-color": [
+            "case",
+            ["boolean", ["feature-state", "hover"], false],
+            "#ff6b6b",
+            "#ef4444",
+          ],
+          "fill-opacity": 0.6,
+        },
+      });
+
+      mapInstance.addLayer({
+        id: `${layerId}-outline`,
+        type: "line",
+        source: sourceId,
+        paint: {
+          "line-color": "#dc2626",
+          "line-width": 2,
+          "line-opacity": 0.8,
+        },
+      });
+
+      mapInstance.addLayer({
+        id: labelLayerId,
+        type: "symbol",
+        source: `${sourceId}-labels`,
+        layout: {
+          "text-field": ["get", "label"],
+          "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+          "text-size": 12,
+          "text-offset": [0, 0],
+          "text-anchor": "center",
+        },
+        paint: {
+          "text-color": "#ffffff",
+          "text-halo-color": "#000000",
+          "text-halo-width": 2,
+          "text-opacity": 1,
+        },
+      });
+
+      let hoveredFeatureId = null;
+      mapInstance.on("mousemove", layerId, (e) => {
+        if (e.features.length > 0) {
+          if (hoveredFeatureId !== null) {
+            mapInstance.setFeatureState(
+              { source: sourceId, id: hoveredFeatureId },
+              { hover: false },
+            );
+          }
+          hoveredFeatureId = e.features[0].id;
+          mapInstance.setFeatureState(
+            { source: sourceId, id: hoveredFeatureId },
+            { hover: true },
+          );
+        }
+      });
+
+      mapInstance.on("mouseleave", layerId, () => {
+        if (hoveredFeatureId !== null) {
+          mapInstance.setFeatureState(
+            { source: sourceId, id: hoveredFeatureId },
+            { hover: false },
+          );
+        }
+        hoveredFeatureId = null;
+      });
+
+      let minLng = 180;
+      let maxLng = -180;
+      let minLat = 90;
+      let maxLat = -90;
+      features.forEach((feature) => {
+        if (feature.geometry?.coordinates) {
+          const coords = feature.geometry.coordinates[0];
+          coords.forEach(([lng, lat]) => {
+            minLng = Math.min(minLng, lng);
+            maxLng = Math.max(maxLng, lng);
+            minLat = Math.min(minLat, lat);
+            maxLat = Math.max(maxLat, lat);
+          });
+        }
+      });
+
+      if (minLng !== 180 && maxLng !== -180) {
+        mapInstance.fitBounds(
+          [
+            [minLng, minLat],
+            [maxLng, maxLat],
+          ],
+          { padding: 50, maxZoom: 15 },
+        );
+      }
+    } catch (error) {
+      console.error("Error adding polygon layer:", error);
+    }
+
+    return () => {
+      if (mapInstance) {
+        if (mapInstance.getLayer(labelLayerId)) {
+          mapInstance.removeLayer(labelLayerId);
+        }
+        if (mapInstance.getLayer(layerId)) {
+          mapInstance.removeLayer(layerId);
+        }
+        if (mapInstance.getLayer(`${layerId}-outline`)) {
+          mapInstance.removeLayer(`${layerId}-outline`);
+        }
+        if (mapInstance.getSource(sourceId)) {
+          mapInstance.removeSource(sourceId);
+        }
+        if (mapInstance.getSource(`${sourceId}-labels`)) {
+          mapInstance.removeSource(`${sourceId}-labels`);
+        }
+      }
+    };
+  }, [detectData, features]);
+
+  useEffect(() => {
+    if (!ENABLE_SAMPLE_DETECTION_ON_LOAD) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setDetectData(SAMPLE_DETECTION_PAYLOAD);
+      setIsDetectionDashboardOpen(true);
+      setStatus("Sample detection loaded (testing mode)");
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!imageKeys && !dominantChangeImageKey) {
+      setImageUrls({});
+      setDominantChangeImageUrl(null);
+      return;
+    }
+
+    const keys = Object.values(imageKeys || {}).filter(Boolean);
+    const allKeys = dominantChangeImageKey ? [...keys, dominantChangeImageKey] : keys;
+
+    if (!allKeys.length) {
+      setImageUrls({});
+      setDominantChangeImageUrl(null);
+      return;
+    }
+
+    const fetchSignedUrls = async () => {
+      setImageLoading(true);
+      try {
+        const response = await fetch("/api/s3/signed-urls", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bucket: dominantChangeImageBucket || detectData?.ai_results?.bucket,
+            keys: allKeys,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch signed image URLs.");
+        }
+
+        const result = await response.json();
+        const keyToUrl = (result?.images || []).reduce((acc, item) => {
+          if (item?.key && item?.url) {
+            acc[item.key] = item.url;
+          }
+          return acc;
+        }, {});
+
+        setImageUrls({
+          before: keyToUrl[imageKeys?.before] || null,
+          after: keyToUrl[imageKeys?.after] || null,
+          heatmap: keyToUrl[imageKeys?.heatmap] || null,
+          mask: keyToUrl[imageKeys?.mask] || null,
+        });
+
+        setDominantChangeImageUrl(
+          dominantChangeImageKey ? keyToUrl[dominantChangeImageKey] || null : null,
+        );
+      } catch (error) {
+        console.error("Image signing failed:", error);
+        setImageUrls({});
+        setDominantChangeImageUrl(null);
+      } finally {
+        setImageLoading(false);
+      }
+    };
+
+    fetchSignedUrls();
+  }, [detectData, imageKeys, dominantChangeImageKey, dominantChangeImageBucket]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -51,6 +456,33 @@ export default function MapPage() {
       document.querySelector(".mapboxgl-ctrl-bottom-right")?.remove();
     }, 100);
     return () => clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
+    const originalError = console.error;
+    const originalWarn = console.warn;
+
+    const isSuppressible = (message) => {
+      const suppressPatterns = ["Failed to fetch", "mapbox.com", "mapbox-gl", "Error compiling"];
+      return suppressPatterns.some((pattern) => String(message).includes(pattern));
+    };
+
+    console.error = function (...args) {
+      if (!isSuppressible(args[0])) {
+        originalError.apply(console, args);
+      }
+    };
+
+    console.warn = function (...args) {
+      if (!isSuppressible(args[0])) {
+        originalWarn.apply(console, args);
+      }
+    };
+
+    return () => {
+      console.error = originalError;
+      console.warn = originalWarn;
+    };
   }, []);
 
   useEffect(() => {
@@ -77,17 +509,14 @@ export default function MapPage() {
           color: "rgb(255, 255, 255)",
           "high-color": "rgb(200, 215, 240)",
           "horizon-blend": 0.1,
-          "space-color": "rgb(220, 230, 245)", 
+          "space-color": "rgb(220, 230, 245)",
           "star-intensity": 0.0,
         });
       });
 
       const el = document.createElement("div");
-      el.className =
-        "w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg animate-pulse";
-      new mapboxgl.Marker({ element: el })
-        .setLngLat(center)
-        .addTo(mapRef.current);
+      el.className = "w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg animate-pulse";
+      new mapboxgl.Marker({ element: el }).setLngLat(center).addTo(mapRef.current);
 
       setStatus("Ahmedabad, Gujarat map loaded.");
     };
@@ -110,9 +539,7 @@ export default function MapPage() {
       mapRef.current.setProjection("globe");
       mapRef.current.flyTo({ zoom: 3, pitch: 0, duration: 2000 });
     } else {
-      mapRef.current.setStyle(
-        viewMode === "satellite" ? STYLES.satellite : STYLES.streets,
-      );
+      mapRef.current.setStyle(viewMode === "satellite" ? STYLES.satellite : STYLES.streets);
       mapRef.current.setProjection("mercator");
       mapRef.current.flyTo({ zoom: 14, pitch: 45, duration: 2000 });
     }
@@ -121,113 +548,35 @@ export default function MapPage() {
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#dce6f0]">
       <div ref={mapContainerRef} className="h-full w-full absolute inset-0" />
-      <nav className="absolute left-6 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-6 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/40 p-4 shadow-2xl">
-        <button
-          onClick={() => setActiveTab("home")}
-          className={`p-3 rounded-xl transition-all duration-300 ${activeTab === "home" ? "bg-slate-900 text-white shadow-md" : "text-slate-500 hover:bg-white/50 hover:text-slate-900"}`}
-        >
-          <Home size={22} />
-        </button>
-        <button
-          onClick={() => setActiveTab("upload")}
-          className={`p-3 rounded-xl transition-all duration-300 ${activeTab === "upload" ? "bg-slate-900 text-white shadow-md" : "text-slate-500 hover:bg-white/50 hover:text-slate-900"}`}
-        >
-          <UploadCloud size={22} />
-        </button>
-      </nav>
-
-      {/* DYNAMIC LEFT PANEL (Expands based on Sidebar Selection) */}
-      <div
-        className={`absolute left-28 top-6 bottom-6 z-10 w-96 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/50 shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${activeTab === "upload" ? "translate-x-0 opacity-100" : "-translate-x-[120%] opacity-0 pointer-events-none"}`}
-      >
-        <div className="h-full w-full p-6 flex flex-col">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-              <UploadCloud size={20} />
-            </div>
-            <h2 className="text-xl font-bold text-slate-800">
-              Compliance Engine
-            </h2>
-          </div>
-          <p className="text-sm text-slate-500 mb-6">
-            Upload municipal zoning laws or environmental regulations (PDF).
-            GeoGuard will automatically extract spatial constraints.
-          </p>
-
-          <div className="flex-1 overflow-y-auto">
-            <ComplaintUpload />
-          </div>
-        </div>
-      </div>
-
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-4 rounded-full bg-white/70 backdrop-blur-md border border-white/40 px-5 py-3 shadow-lg">
-        <div className="flex h-3 w-3 items-center justify-center">
-          <div className="absolute h-3 w-3 animate-ping rounded-full bg-emerald-400 opacity-75"></div>
-          <div className="relative h-2 w-2 rounded-full bg-emerald-500"></div>
-        </div>
-
-        <p className="text-sm font-semibold text-slate-700 text-center">
-          {status}
-        </p>
-      </div>
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex items-center rounded-full bg-white/80 backdrop-blur-xl border border-white/50 p-1.5 shadow-2xl">
-        <button
-          onClick={() => setViewMode("globe")}
-          className={`flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300 ${viewMode === "globe" ? "bg-slate-900 text-white shadow-md" : "text-slate-600 hover:text-slate-900"}`}
-        >
-          <Globe size={16} /> Globe
-        </button>
-        <button
-          onClick={() => setViewMode("satellite")}
-          className={`flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300 ${viewMode === "satellite" ? "bg-slate-900 text-white shadow-md" : "text-slate-600 hover:text-slate-900"}`}
-        >
-          <Layers size={16} /> Satellite
-        </button>
-        <button
-          onClick={() => setViewMode("streets")}
-          className={`flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300 ${viewMode === "streets" ? "bg-slate-900 text-white shadow-md" : "text-slate-600 hover:text-slate-900"}`}
-        >
-          <MapIcon size={16} /> Streets
-        </button>
-      </div>
-
-      <div className="absolute right-6 top-6 bottom-6 z-10 w-80 flex flex-col gap-4 pointer-events-none">
-        <div className="rounded-3xl bg-white/70 backdrop-blur-xl border border-white/50 p-6 shadow-2xl pointer-events-auto">
-          <h3 className="text-sm font-medium text-slate-500">
-            Active Violations
-          </h3>
-          <p className="text-4xl font-bold text-slate-800 mt-2">124</p>
-          <div className="mt-4 h-1 w-full bg-slate-200 rounded-full overflow-hidden">
-            <div className="h-full bg-rose-500 w-[32%] rounded-full"></div>
-          </div>
-        </div>
-
-        <div className="flex-1 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/50 p-6 shadow-2xl overflow-hidden flex flex-col pointer-events-auto">
-          <h3 className="text-sm font-bold text-slate-800 mb-4">
-            Recent Detections
-          </h3>
-          <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="group cursor-pointer rounded-2xl border border-white/60 bg-white/40 p-4 transition-all hover:bg-white hover:shadow-md"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-900">
-                    #CHG-583{i}
-                  </span>
-                  <span className="flex items-center gap-1 text-[10px] font-semibold text-rose-600 bg-rose-100 px-2 py-1 rounded-full">
-                    <AlertTriangle size={10} /> Encroachment
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-slate-500 line-clamp-1">
-                  Industrial zone overlapping protected waterbody buffer.
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <MapSidebarNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <UploadPanel activeTab={activeTab} />
+      <StatusBadge status={status} />
+      <ViewModeSwitch viewMode={viewMode} onChange={setViewMode} />
+      <DetectionSidePanel
+        isDetectionDashboardOpen={isDetectionDashboardOpen}
+        features={features}
+        violations={violations}
+        onOpenDashboard={() => setIsDetectionDashboardOpen(true)}
+      />
+      <DetectionDashboard
+        isDetectionDashboardOpen={isDetectionDashboardOpen}
+        isDetectionFullscreen={isDetectionFullscreen}
+        setIsDetectionFullscreen={setIsDetectionFullscreen}
+        onClose={() => {
+          setIsDetectionDashboardOpen(false);
+          setIsDetectionFullscreen(false);
+        }}
+        imageLoading={imageLoading}
+        imageUrls={imageUrls}
+        dominantChangeImageUrl={dominantChangeImageUrl}
+        dominantResult={dominantResult}
+        dominantTrend={dominantTrend}
+        hasDominantArea={hasDominantArea}
+        dominantAreaPercentage={dominantAreaPercentage}
+        detectData={detectData}
+        features={features}
+        violations={violations}
+      />
     </main>
   );
 }

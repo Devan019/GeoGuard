@@ -17,6 +17,8 @@ class ConnectionManager:
             del self.active_connections[client_id]
 
     async def broadcast_json(self, message: dict):
+        print(f"Broadcasting message to {len(self.active_connections)} clients.")
+        print(f"Active clients: {list(self.active_connections.keys())}")
         # Since it's a dict now, we iterate over .values()
         for connection in self.active_connections.values():
             await connection.send_json(message)

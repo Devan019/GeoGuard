@@ -89,3 +89,25 @@ export async function uploadPdfToS3({ buffer, fileName }) {
     signedUrl,
   };
 }
+
+export async function getSignedObjectUrl({
+  key,
+  bucketName,
+  expiresIn = 3600,
+}) {
+  if (!key) {
+    throw new Error("Missing object key.");
+  }
+
+  const client = getS3Client();
+  const bucket = bucketName || requiredEnv("AWS_S3_BUCKET_NAME");
+
+  return getSignedUrl(
+    client,
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    }),
+    { expiresIn },
+  );
+}

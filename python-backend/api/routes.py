@@ -385,7 +385,7 @@ async def inference_local(
         # 7. Push WebSocket
         data = {
             "feature_collection": feature_collection,
-            "dominant_change": {"dominant_change": detected_type},
+            "dominant_change": detected_type,
             "ai_results": {
                 "bucket": ai_data.get("bucket"),
                 "image_keys": ai_data["image_keys"],
@@ -424,3 +424,9 @@ async def inference_local(
         logger.error(f" CRITICAL SERVER ERROR: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@router.get("/test")
+async def test_endpoint():
+    await manager.broadcast_json({"event": "NEW_DETECTION", "data": {"message": "This is a test broadcast from the server!"}})
+    return {"status": "test message sent"}
