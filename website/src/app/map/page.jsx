@@ -11,13 +11,18 @@ import ViewModeSwitch from "./components/ViewModeSwitch";
 import DetectionSidePanel from "./components/DetectionSidePanel";
 import DetectionDashboard from "./components/DetectionDashboard";
 import PastDetectionsPanel from "./components/PastDetectionsPanel";
-import { getFeatureSeverity, getSeverityLevel } from "./components/detectionHelpers";
+import {
+  getFeatureSeverity,
+  getSeverityLevel,
+} from "./components/detectionHelpers";
+import ConnectionStatus from "./components/ConnectionStatus";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-const AHMEDABAD_CENTER = [72.5714, 23.0225];
+const AHMEDABAD_CENTER = [72.585, 23.08];
+
 const AHMEDABAD_BOUNDS = [
   [72.42, 22.95],
-  [72.72, 23.16],
+  [72.75, 23.2],
 ];
 const STYLES = {
   satellite: "mapbox://styles/mapbox/satellite-streets-v12",
@@ -50,12 +55,16 @@ const toTitleCase = (value) =>
 const formatViolationReason = (violation) => {
   const rule = violation?.rule_broken || {};
   const threshold = Number(rule?.threshold_value);
-  const thresholdLabel = Number.isFinite(threshold) ? `${threshold}${rule?.threshold_unit || ""}` : "N/A";
+  const thresholdLabel = Number.isFinite(threshold)
+    ? `${threshold}${rule?.threshold_unit || ""}`
+    : "N/A";
 
   const metricDistances = (violation?.metrics || [])
     .map((metric) => Number(metric?.data?.[2]))
     .filter((value) => Number.isFinite(value));
-  const nearestDistance = metricDistances.length ? Math.min(...metricDistances) : null;
+  const nearestDistance = metricDistances.length
+    ? Math.min(...metricDistances)
+    : null;
 
   return {
     summary: `${toTitleCase(rule?.target_entity)} should be ${rule?.spatial_relation || "within rule"} ${thresholdLabel} from ${toTitleCase(rule?.reference_entity)}.`,
@@ -180,7 +189,8 @@ export default function MapPage() {
   const [detectData, setDetectData] = useState(null);
   const [imageUrls, setImageUrls] = useState({});
   const [dominantChangeImageUrl, setDominantChangeImageUrl] = useState(null);
-  const [isDetectionDashboardOpen, setIsDetectionDashboardOpen] = useState(false);
+  const [isDetectionDashboardOpen, setIsDetectionDashboardOpen] =
+    useState(false);
   const [isDetectionFullscreen, setIsDetectionFullscreen] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
@@ -193,11 +203,15 @@ export default function MapPage() {
   const dominantAreaPercentage = Number(dominantRaw?.area_percentage);
   const hasDominantArea = Number.isFinite(dominantAreaPercentage);
   const imageKeys = detectData?.ai_results?.image_keys || null;
-  const dominantChangeImageKey = detectData?.dominant_change?.image_metadata?.s3_key || null;
+  const dominantChangeImageKey =
+    detectData?.dominant_change?.image_metadata?.s3_key || null;
   const dominantChangeImageBucket =
-    detectData?.dominant_change?.image_metadata?.bucket || detectData?.ai_results?.bucket || null;
+    detectData?.dominant_change?.image_metadata?.bucket ||
+    detectData?.ai_results?.bucket ||
+    null;
 
-  const features = detectData?.feature_collection?.features || detectData?.features || [];
+  const features =
+    detectData?.feature_collection?.features || detectData?.features || [];
   const violations = features.flatMap((feature, fIdx) =>
     (feature?.properties?.violations || []).map((violation, vIdx) => ({
       featureIndex: fIdx,
@@ -268,7 +282,9 @@ export default function MapPage() {
 
       setHistoryItems(Array.isArray(result.history) ? result.history : []);
     } catch (error) {
-      setHistoryError(error instanceof Error ? error.message : "Unable to load history.");
+      setHistoryError(
+        error instanceof Error ? error.message : "Unable to load history.",
+      );
     } finally {
       setHistoryLoading(false);
     }
@@ -362,8 +378,9 @@ export default function MapPage() {
             coordinates: centroid,
           },
           properties: {
-            label: `${toTitleCase(feature.properties?.detected_type || "Unknown")} CHG-${feature.properties?.change_id || "-"
-              }`,
+            label: `${toTitleCase(feature.properties?.detected_type || "Unknown")} CHG-${
+              feature.properties?.change_id || "-"
+            }`,
             reason: getRuleLabel(feature),
             changeId: feature.properties?.change_id,
           },
@@ -510,7 +527,9 @@ export default function MapPage() {
             parsedViolations = [];
           }
         }
-        const violationList = Array.isArray(parsedViolations) ? parsedViolations : [];
+        const violationList = Array.isArray(parsedViolations)
+          ? parsedViolations
+          : [];
 
         const reasons = violationList
           .slice(0, 3)
@@ -523,7 +542,8 @@ export default function MapPage() {
           })
           .join("");
 
-        const isCompliant = props.is_compliant === true || props.is_compliant === "true";
+        const isCompliant =
+          props.is_compliant === true || props.is_compliant === "true";
         const complianceBadge = isCompliant
           ? '<span style="color:#166534;font-weight:700;">Compliant</span>'
           : '<span style="color:#991b1b;font-weight:700;">Non-compliant</span>';
@@ -616,44 +636,48 @@ export default function MapPage() {
     detectionMarkersRef.current = [];
 
     const markerCandidates = features.length
-      ? features.slice(0, 12).map((feature) => {
-        const coords = feature?.geometry?.coordinates?.[0];
-        if (!Array.isArray(coords) || !coords.length) return null;
+      ? features
+          .slice(0, 12)
+          .map((feature) => {
+            const coords = feature?.geometry?.coordinates?.[0];
+            if (!Array.isArray(coords) || !coords.length) return null;
 
-        const [lng, lat] = coords[0];
-        const severity = getFeatureSeverity(feature);
-        const colorBySeverity = {
-          compliant: "#16a34a",
-          high: "#dc2626",
-          medium: "#f59e0b",
-          low: "#3b82f6",
-        };
-        const color = colorBySeverity[severity] || "#3b82f6";
-        const isCompliant = severity === "compliant";
+            const [lng, lat] = coords[0];
+            const severity = getFeatureSeverity(feature);
+            const colorBySeverity = {
+              compliant: "#16a34a",
+              high: "#dc2626",
+              medium: "#f59e0b",
+              low: "#3b82f6",
+            };
+            const color = colorBySeverity[severity] || "#3b82f6";
+            const isCompliant = severity === "compliant";
 
-        return {
-          lng,
-          lat,
-          color,
-          changeId: feature?.properties?.change_id,
-          type: feature?.properties?.detected_type,
-          isCompliant,
-        };
-      }).filter(Boolean)
+            return {
+              lng,
+              lat,
+              color,
+              changeId: feature?.properties?.change_id,
+              type: feature?.properties?.detected_type,
+              isCompliant,
+            };
+          })
+          .filter(Boolean)
       : [
-        {
-          lng: AHMEDABAD_CENTER[0] + 0.008,
-          lat: AHMEDABAD_CENTER[1] + 0.006,
-          color: "#f59e0b",
-          changeId: "SAMPLE",
-          type: "waterbody",
-          isCompliant: false,
-        },
-      ];
+          {
+            lng: AHMEDABAD_CENTER[0] + 0.008,
+            lat: AHMEDABAD_CENTER[1] + 0.006,
+            color: "#f59e0b",
+            changeId: "SAMPLE",
+            type: "waterbody",
+            isCompliant: false,
+          },
+        ];
 
     markerCandidates.forEach((item) => {
       const markerEl = document.createElement("div");
-      markerEl.className = "h-4 w-4 rounded-full border-2 border-white shadow-lg";
+      markerEl.className =
+        "h-4 w-4 rounded-full border-2 border-white shadow-lg";
       markerEl.style.backgroundColor = item.color;
 
       const marker = new mapboxgl.Marker({ element: markerEl })
@@ -703,7 +727,9 @@ export default function MapPage() {
     }
 
     const keys = Object.values(imageKeys || {}).filter(Boolean);
-    const allKeys = dominantChangeImageKey ? [...keys, dominantChangeImageKey] : keys;
+    const allKeys = dominantChangeImageKey
+      ? [...keys, dominantChangeImageKey]
+      : keys;
 
     if (!allKeys.length) {
       setImageUrls({});
@@ -743,7 +769,9 @@ export default function MapPage() {
         });
 
         setDominantChangeImageUrl(
-          dominantChangeImageKey ? keyToUrl[dominantChangeImageKey] || null : null,
+          dominantChangeImageKey
+            ? keyToUrl[dominantChangeImageKey] || null
+            : null,
         );
       } catch (error) {
         console.error("Image signing failed:", error);
@@ -755,7 +783,12 @@ export default function MapPage() {
     };
 
     fetchSignedUrls();
-  }, [detectData, imageKeys, dominantChangeImageKey, dominantChangeImageBucket]);
+  }, [
+    detectData,
+    imageKeys,
+    dominantChangeImageKey,
+    dominantChangeImageBucket,
+  ]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -770,8 +803,15 @@ export default function MapPage() {
     const originalWarn = console.warn;
 
     const isSuppressible = (message) => {
-      const suppressPatterns = ["Failed to fetch", "mapbox.com", "mapbox-gl", "Error compiling"];
-      return suppressPatterns.some((pattern) => String(message).includes(pattern));
+      const suppressPatterns = [
+        "Failed to fetch",
+        "mapbox.com",
+        "mapbox-gl",
+        "Error compiling",
+      ];
+      return suppressPatterns.some((pattern) =>
+        String(message).includes(pattern),
+      );
     };
 
     console.error = function (...args) {
@@ -823,8 +863,11 @@ export default function MapPage() {
       });
 
       const el = document.createElement("div");
-      el.className = "w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg animate-pulse";
-      centerMarkerRef.current = new mapboxgl.Marker({ element: el }).setLngLat(center).addTo(mapRef.current);
+      el.className =
+        "w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg animate-pulse";
+      centerMarkerRef.current = new mapboxgl.Marker({ element: el })
+        .setLngLat(center)
+        .addTo(mapRef.current);
 
       setStatus("Ahmedabad, Gujarat map loaded.");
     };
@@ -849,11 +892,12 @@ export default function MapPage() {
     if (!mapRef.current) return;
 
     const mapInstance = mapRef.current;
-    const targetStyle = viewMode === "globe"
-      ? STYLES.satellite
-      : viewMode === "satellite"
+    const targetStyle =
+      viewMode === "globe"
         ? STYLES.satellite
-        : STYLES.streets;
+        : viewMode === "satellite"
+          ? STYLES.satellite
+          : STYLES.streets;
 
     const forceOverlayRefresh = () => {
       setStyleLoadTick((prev) => prev + 1);
@@ -892,6 +936,9 @@ export default function MapPage() {
       <MapSidebarNav activeTab={activeTab} onTabChange={setActiveTab} />
       <UploadPanel activeTab={activeTab} />
       <StatusBadge status={status} />
+      <div className="absolute top-4 right-6 z-50">
+        <ConnectionStatus />
+      </div>
       <ViewModeSwitch viewMode={viewMode} onChange={setViewMode} />
       <PastDetectionsPanel
         activeTab={activeTab}
@@ -918,7 +965,9 @@ export default function MapPage() {
                 style={{ backgroundColor: item.color }}
               />
               <div>
-                <p className="text-xs font-semibold text-slate-800">{item.label}</p>
+                <p className="text-xs font-semibold text-slate-800">
+                  {item.label}
+                </p>
                 <p className="text-[11px] text-slate-500">{item.meaning}</p>
               </div>
             </div>
