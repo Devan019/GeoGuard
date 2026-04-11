@@ -2,7 +2,6 @@ import os
 import numpy as np
 from PIL import Image
 import pystac_client
-import planetary_computer
 import rasterio
 from rasterio.windows import from_bounds
 from rasterio.warp import transform_bounds
@@ -11,22 +10,23 @@ from dateutil.relativedelta import relativedelta
 
 def fetch_rgb_composite(bbox: list, time_range: str):
     """
-    Queries Microsoft Planetary Computer for the least cloudy Sentinel-2 
+    Queries AWS Element84 for the least cloudy Sentinel-2 
     image in the given time range and extracts the RGB bands.
     """
-    print(f"Searching catalog for time range: {time_range}...")
+    print(f"Searching AWS Earth Search for time range: {time_range}...")
     
-    catalog = pystac_client.Client.open(
-        "https://planetarycomputer.microsoft.com/api/stac/v1",
-        modifier=planetary_computer.sign_inplace,
-    )
+    # 1. Open the Element84 AWS Catalog
+    catalog = pystac_client.Client.open("https://earth-search.aws.element84.com/v1")
 
+    # 2. Search for images with < 5% clouds
     search = catalog.search(
         collections=["sentinel-2-l2a"],
         bbox=bbox,
         datetime=time_range,
         query={"eo:cloud_cover": {"lt": 5}}, 
-        sortby=[{"field": "eo:cloud_cover", "direction": "asc"}] 
+        # Sort by datetime to get the most recent clear image
+        sortby=[{"field": "properties.datetime", "direction": "desc"}],
+        limit=10
     )
     
     items = list(search.items())
@@ -37,20 +37,23 @@ def fetch_rgb_composite(bbox: list, time_range: str):
     date_captured = item.datetime.strftime('%Y-%m-%d')
     print(f"Found clear image captured on: {date_captured}")
     
-    print("Downloading and cropping B04, B03, B02...")
+    print("Downloading and cropping Red, Green, Blue bands from AWS...")
     
-    # Read RGB bands. We open the first band to get the CRS, transform the bbox, then read.
-    with rasterio.open(item.assets["B04"].href) as src: # Red
-        # CRITICAL FIX: Transform EPSG:4326 (Lat/Lon) to the Image's Native CRS (UTM)
+    # 3. Read RGB bands using AWS semantic keys
+    with rasterio.open(item.assets["red"].href) as src:
+        # Transform EPSG:4326 (Lat/Lon) to the Image's Native CRS (UTM)
         proj_bbox = transform_bounds("EPSG:4326", src.crs, *bbox)
         win = from_bounds(*proj_bbox, transform=src.transform)
-        r = src.read(1, window=win)
         
-    with rasterio.open(item.assets["B03"].href) as src: # Green
-        g = src.read(1, window=win)
+        # Helper function to read bands cleanly
+        def safe_read(key):
+            # boundless=True prevents crashes if the bbox clips the edge of the satellite image
+            with rasterio.open(item.assets[key].href) as b_src:
+                return b_src.read(1, window=win, boundless=True).astype(np.float32)
         
-    with rasterio.open(item.assets["B02"].href) as src: # Blue
-        b = src.read(1, window=win)
+        r = safe_read("red")
+        g = safe_read("green")
+        b = safe_read("blue")
 
     # Check if the cropped array is valid
     if r.size == 0 or g.size == 0 or b.size == 0:
@@ -59,7 +62,7 @@ def fetch_rgb_composite(bbox: list, time_range: str):
     # Stack into a single array (Height, Width, Channels)
     rgb = np.dstack((r, g, b))
     
-    # Normalize to 8-bit (0-255)
+    # Normalize Sentinel-2 surface reflectance to 8-bit (0-255)
     rgb = np.clip(rgb / 3000.0 * 255.0, 0, 255).astype(np.uint8)
     
     return rgb, date_captured
