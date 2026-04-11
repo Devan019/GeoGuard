@@ -2,577 +2,577 @@
   "rules": [
     {
       "target_entity": "industrial",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 50,
-      "threshold_unit": "meters"
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 50,
-      "threshold_unit": "meters"
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 10,
-      "threshold_unit": "meters"
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "residential",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 100,
-      "threshold_unit": "meters"
+      "reference_entity": "residential",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "vegetation",
-      "reference_entity": "waterbody",
-      "spatial_relation": "within",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "waterbody",
+      "spatial_relation": "within"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "residential",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 100,
-      "threshold_unit": "meters"
+      "reference_entity": "residential",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 50,
-      "threshold_unit": "meters"
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 300,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "residential",
-      "reference_entity": "industrial",
-      "spatial_relation": "max_distance",
-      "threshold_value": 5000,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "vegetation",
-      "reference_entity": "waterbody",
-      "spatial_relation": "intersects",
-      "threshold_value": null,
-      "threshold_unit": null
-    },
-    {
-      "target_entity": "industrial",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 1000,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
       "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
-      "threshold_value": 500,
-      "threshold_unit": "meters"
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
+      "threshold_unit": "meters",
+      "threshold_value": 5000,
       "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
-      "threshold_value": 1000,
-      "threshold_unit": "meters"
+      "spatial_relation": "max_distance"
     },
     {
       "target_entity": "vegetation",
+      "threshold_unit": null,
+      "threshold_value": null,
       "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 200,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "residential",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 800,
-      "threshold_unit": "meters"
+      "spatial_relation": "intersects"
     },
     {
       "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 1000,
       "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 800,
-      "threshold_unit": "meters"
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 500,
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
+      "threshold_unit": "meters",
+      "threshold_value": 1000,
       "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
-      "threshold_value": 400,
-      "threshold_unit": "meters"
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "vegetation",
-      "reference_entity": "residential",
-      "spatial_relation": "min_area",
+      "threshold_unit": "meters",
+      "threshold_value": 200,
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "residential",
+      "threshold_unit": "meters",
+      "threshold_value": 800,
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 800,
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "residential",
+      "threshold_unit": "meters",
+      "threshold_value": 400,
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "vegetation",
+      "threshold_unit": "percent",
       "threshold_value": 25,
-      "threshold_unit": "percent"
+      "reference_entity": "residential",
+      "spatial_relation": "min_area"
     },
     {
       "target_entity": "waterbody",
-      "reference_entity": "residential",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 400,
-      "threshold_unit": "meters"
+      "reference_entity": "residential",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "vegetation",
-      "spatial_relation": "max_distance",
+      "threshold_unit": "meters",
       "threshold_value": 1000,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 500,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
-      "reference_entity": "residential",
-      "spatial_relation": "min_distance",
-      "threshold_value": null,
-      "threshold_unit": null
-    },
-    {
-      "target_entity": "industrial",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
-      "threshold_value": 500,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
       "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
+      "spatial_relation": "max_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 500,
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "residential",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 500,
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": null,
+      "threshold_value": null,
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_area",
+      "threshold_unit": "sq_meters",
       "threshold_value": 10000,
-      "threshold_unit": "sq_meters"
+      "reference_entity": "industrial",
+      "spatial_relation": "min_area"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 100,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
       "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": null,
-      "threshold_unit": null
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": null,
+      "threshold_value": null,
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
+      "threshold_unit": null,
+      "threshold_value": null,
       "reference_entity": "residential",
-      "spatial_relation": "min_distance",
-      "threshold_value": null,
-      "threshold_unit": null
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "vegetation",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 800,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
       "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 100,
-      "threshold_unit": "meters"
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 100,
-      "threshold_unit": "meters"
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 100,
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 100,
-      "threshold_unit": "meters"
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "residential",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 15,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 5000,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
-      "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
-      "threshold_value": 5000,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 200,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "residential",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 100,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
       "reference_entity": "residential",
-      "spatial_relation": "min_distance",
-      "threshold_value": 100,
-      "threshold_unit": "meters"
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
-      "threshold_value": 100,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 5000,
       "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 50,
-      "threshold_unit": "meters"
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 5000,
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 200,
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 100,
-      "threshold_unit": "meters"
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 100,
+      "reference_entity": "residential",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 100,
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 50,
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "residential",
+      "threshold_unit": "meters",
+      "threshold_value": 100,
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "vegetation",
-      "reference_entity": "residential",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 20,
-      "threshold_unit": "meters"
+      "reference_entity": "residential",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "vegetation",
-      "spatial_relation": "max_distance",
+      "threshold_unit": "meters",
       "threshold_value": 500,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "residential",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 30,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 50,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "residential",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 50,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
       "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
+      "spatial_relation": "max_distance"
+    },
+    {
+      "target_entity": "residential",
+      "threshold_unit": "meters",
+      "threshold_value": 30,
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 50,
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "residential",
+      "threshold_unit": "meters",
+      "threshold_value": 50,
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "waterbody",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 50,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 20000,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "residential",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 20000,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
-      "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
-      "threshold_value": null,
-      "threshold_unit": null
-    },
-    {
-      "target_entity": "residential",
       "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 20000,
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "residential",
+      "threshold_unit": "meters",
+      "threshold_value": 20000,
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": null,
+      "threshold_value": null,
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "residential",
+      "threshold_unit": "meters",
       "threshold_value": 1000,
-      "threshold_unit": "meters"
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 1000,
       "reference_entity": "residential",
-      "spatial_relation": "min_distance",
-      "threshold_value": 1000,
-      "threshold_unit": "meters"
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "vegetation",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "residential",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "residential",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 1000,
-      "threshold_unit": "meters"
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "vegetation",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 300,
-      "threshold_unit": "meters"
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
+      "threshold_unit": "meters",
+      "threshold_value": 0,
       "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
-      "threshold_value": 0,
-      "threshold_unit": "meters"
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 0,
       "reference_entity": "residential",
-      "spatial_relation": "min_distance",
-      "threshold_value": 0,
-      "threshold_unit": "meters"
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
+      "threshold_unit": null,
       "threshold_value": null,
-      "threshold_unit": null
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
-      "reference_entity": "vegetation",
-      "spatial_relation": "min_area",
+      "threshold_unit": "sq_meters",
       "threshold_value": 8000,
-      "threshold_unit": "sq_meters"
-    },
-    {
-      "target_entity": "industrial",
-      "reference_entity": "residential",
-      "spatial_relation": "min_distance",
-      "threshold_value": 5000,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
-      "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 1000,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "residential",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
-      "threshold_value": 50,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
       "reference_entity": "vegetation",
-      "spatial_relation": "min_distance",
-      "threshold_value": 100,
-      "threshold_unit": "meters"
+      "spatial_relation": "min_area"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 5000,
+      "reference_entity": "residential",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 1000,
+      "reference_entity": "waterbody",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "residential",
+      "threshold_unit": "meters",
+      "threshold_value": 50,
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 100,
+      "reference_entity": "vegetation",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "residential",
+      "threshold_unit": "meters",
+      "threshold_value": 100,
       "reference_entity": "waterbody",
-      "spatial_relation": "min_distance",
-      "threshold_value": 100,
-      "threshold_unit": "meters"
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 20,
-      "threshold_unit": "meters"
+      "reference_entity": "industrial",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "road",
-      "spatial_relation": "min_distance",
+      "threshold_unit": "meters",
       "threshold_value": 18,
-      "threshold_unit": "meters"
-    },
-    {
-      "target_entity": "industrial",
       "reference_entity": "road",
-      "spatial_relation": "min_distance",
+      "spatial_relation": "min_distance"
+    },
+    {
+      "target_entity": "industrial",
+      "threshold_unit": "meters",
       "threshold_value": 24,
-      "threshold_unit": "meters"
+      "reference_entity": "road",
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
+      "threshold_unit": "meters",
+      "threshold_value": 100,
       "reference_entity": "monument",
-      "spatial_relation": "min_distance",
-      "threshold_value": 100,
-      "threshold_unit": "meters"
+      "spatial_relation": "min_distance"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "industrial",
-      "spatial_relation": "min_area",
+      "threshold_unit": "sq_meters",
       "threshold_value": 100,
-      "threshold_unit": "sq_meters"
+      "reference_entity": "industrial",
+      "spatial_relation": "min_area"
     },
     {
       "target_entity": "industrial",
-      "reference_entity": "industrial",
-      "spatial_relation": "max_area",
+      "threshold_unit": "sq_meters",
       "threshold_value": 1000,
-      "threshold_unit": "sq_meters"
+      "reference_entity": "industrial",
+      "spatial_relation": "max_area"
     }
   ]
 }
