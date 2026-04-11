@@ -581,7 +581,7 @@ export default function MapPage() {
           : '<span style="color:#991b1b;font-weight:700;">Non-compliant</span>';
 
         const popupHtml = `
-          <div style="max-width:320px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;">
+          <div style="max-width:320px;font-family:Poppins,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;">
             <div style="font-weight:700;font-size:13px;margin-bottom:6px;">CHG-${props.change_id || "-"} • ${toTitleCase(props.detected_type || "Unknown")}</div>
             <div style="font-size:12px;margin-bottom:6px;">Status: ${complianceBadge}</div>
             <div style="font-size:12px;line-height:1.45;">
@@ -716,7 +716,7 @@ export default function MapPage() {
         .setLngLat([item.lng, item.lat])
         .setPopup(
           new mapboxgl.Popup({ offset: 16 }).setHTML(
-            `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:12px;">
+            `<div style="font-family:Poppins,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:12px;">
               <strong>CHG-${item.changeId}</strong><br/>
               Type: ${toTitleCase(item.type)}<br/>
               Status: <strong style="color:${item.isCompliant ? "#166534" : "#991b1b"}">${item.isCompliant ? "Compliant" : "Violation"}</strong>

@@ -79,8 +79,8 @@
 
 
 @theme inline {
- --font-sans: 'Geist', 'Geist Fallback';
- --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+ --font-sans: var(--font-poppins), 'Poppins', ui-sans-serif, system-ui, sans-serif;
+ --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
  --color-background: var(--background);
  --color-foreground: var(--foreground);
  --color-card: var(--card);
@@ -126,6 +126,7 @@
  }
  body {
    @apply bg-background text-foreground;
+   font-family: var(--font-poppins), 'Poppins', ui-sans-serif, system-ui, sans-serif;
  }
 }
 

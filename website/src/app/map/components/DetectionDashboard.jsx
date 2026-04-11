@@ -2,6 +2,8 @@ import {
   BarChart3,
   CheckCircle2,
   CircleAlert,
+  Download,
+  Loader2,
   Maximize2,
   Minimize2,
   ShieldAlert,
@@ -29,6 +31,7 @@ export default function DetectionDashboard({
 }) {
   const [selectedImage, setSelectedImage] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const compliantCount = features.filter((f) => f.properties?.is_compliant).length;
   const nonCompliantCount = Math.max(features.length - compliantCount, 0);
   const maxConfidence = Number(detectData?.ai_results?.max_confidence);
@@ -42,6 +45,75 @@ export default function DetectionDashboard({
     },
     { high: 0, medium: 0, low: 0 },
   );
+
+  const handleDownloadPdf = async () => {
+    if (isDownloadingPdf) return;
+
+    const imageEntries = [
+      { label: "Before", url: imageUrls?.before || null },
+      { label: "After", url: imageUrls?.after || null },
+      { label: "Heatmap", url: imageUrls?.heatmap || null },
+      { label: "Mask", url: imageUrls?.mask || null },
+      { label: "Dominant Change", url: dominantChangeImageUrl || null },
+    ].filter((item) => item.url);
+
+    const payload = {
+      reportTitle: "AI Compliance Detection Report",
+      summary: {
+        totalChanges: features.length,
+        totalViolations: violations.length,
+        compliantCount,
+        nonCompliantCount,
+        severity: severityCounts,
+        dominantResult,
+        dominantTrend,
+        dominantAreaPercentage: hasDominantArea ? dominantAreaPercentage : null,
+        maxConfidencePercentage: Number.isFinite(maxConfidence)
+          ? Number((maxConfidence * 100).toFixed(2))
+          : null,
+      },
+      images: imageEntries,
+      violations: violations.map((item) => ({
+        changeId: item.changeId,
+        detectedType: item.detectedType,
+        severity: item.severityScore,
+        spatialRelation: item.spatialRelation,
+        referenceEntity: item.referenceEntity,
+        threshold: item.threshold,
+        thresholdUnit: item.thresholdUnit,
+        metricsCount: item.metrics?.length || 0,
+      })),
+    };
+
+    setIsDownloadingPdf(true);
+    try {
+      const response = await fetch("/api/detections/report-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result?.error || "Unable to generate PDF report.");
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = `compliance-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to download PDF report.";
+      window.alert(message);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   return (
     <div
@@ -159,16 +231,28 @@ export default function DetectionDashboard({
               </div>
             </div>
 
-            <button
-              className="w-full rounded-xl bg-slate-900 text-white text-sm font-semibold py-2.5"
-              type="button"
-              onClick={() => {
-                const el = document.getElementById("violation-details-list");
-                el?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-            >
-              View Violation Details
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                className="w-full rounded-xl bg-slate-900 text-white text-sm font-semibold py-2.5"
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById("violation-details-list");
+                  el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                View More Details
+              </button>
+
+              <button
+                className="w-full rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-semibold py-2.5 inline-flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={isDownloadingPdf || (!violations.length && !features.length)}
+              >
+                {isDownloadingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                Download PDF
+              </button>
+            </div>
           </aside>
 
           <section className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
