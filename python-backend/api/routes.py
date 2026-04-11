@@ -314,46 +314,45 @@ async def inference_local(
     time1_image: UploadFile = File(...),
     time2_image: UploadFile = File(...),
     bbox_str: str = Form(..., description='e.g., "[72.48, 23.03, 72.54, 23.08]"'),
-    client_id: str = Form(...),
     time1_range: str = Form("2020-01-01"),
     time2_range: str = Form("2024-01-01")
 ):
     if session is None:
-        logger.error(f"[{client_id}] Attempted inference but ML Model is not loaded.")
+        logger.error(f" Attempted inference but ML Model is not loaded.")
         raise HTTPException(status_code=503, detail="ML Model not loaded.")
 
     start_total = time.perf_counter()
-    logger.info(f"--- Starting New Detection for Client: {client_id} ---")
+    logger.info(f"--- Starting New Detection for Client ---")
 
     try:
         # 1. Parse Bbox
         bbox = json.loads(bbox_str)
-        logger.info(f"[{client_id}] Parsed BBox: {bbox}")
+        logger.info(f"[] Parsed BBox: {bbox}")
 
         # 2. Read Uploaded Files
         t_read_start = time.perf_counter()
         t1_bytes = await time1_image.read()
         t2_bytes = await time2_image.read()
-        logger.info(f"[{client_id}] File read complete ({len(t1_bytes)} bytes). Time: {time.perf_counter()-t_read_start:.2f}s")
+        logger.info(f" File read complete ({len(t1_bytes)} bytes). Time: {time.perf_counter()-t_read_start:.2f}s")
 
         # 3. AI Inference
         t_ai_start = time.perf_counter()
-        logger.info(f"[{client_id}] Running ONNX Inference...")
+        logger.info(f"Running ONNX Inference...")
         ai_data = process_ai_change_detection(t1_bytes, t2_bytes, session)
-        logger.info(f"[{client_id}] Inference complete. Max Confidence: {ai_data.get('max_confidence'):.4f}. Time: {time.perf_counter()-t_ai_start:.2f}s")
+        logger.info(f"Inference complete. Max Confidence: {ai_data.get('max_confidence'):.4f}. Time: {time.perf_counter()-t_ai_start:.2f}s")
 
         # 4. Fetching Spectral Bands (The high-latency part)
         t_stac_start = time.perf_counter()
-        logger.info(f"[{client_id}] Fetching spectral bands from Microsoft STAC...")
+        logger.info(f"Fetching spectral bands from Microsoft STAC...")
         t1_bands = fetch_cropped_bands(bbox, time1_range)
         t2_bands = fetch_cropped_bands(bbox, time2_range)
 
         if t1_bands is None or t2_bands is None:
             missing = "Time 1" if t1_bands is None else "Time 2"
-            logger.warning(f"[{client_id}] STAC API returned None for {missing} in range: {time1_range if t1_bands is None else time2_range}")
+            logger.warning(f"STAC API returned None for {missing} in range: {time1_range if t1_bands is None else time2_range}")
             raise HTTPException(status_code=404, detail=f"No clear images found for {missing}.")
         
-        logger.info(f"[{client_id}] STAC Data received. Shape: {t1_bands['red'].shape}. Time: {time.perf_counter()-t_stac_start:.2f}s")
+        logger.info(f"STAC Data received. Shape: {t1_bands['red'].shape}. Time: {time.perf_counter()-t_stac_start:.2f}s")
 
         # 5. Detect Change Type
         t_type_start = time.perf_counter()
@@ -361,11 +360,11 @@ async def inference_local(
             t1_green=t1_bands['green'], t1_red=t1_bands['red'], t1_nir=t1_bands['nir'], t1_swir=t1_bands['swir'],
             t2_green=t2_bands['green'], t2_red=t2_bands['red'], t2_nir=t2_bands['nir'], t2_swir=t2_bands['swir']
         )
-        logger.info(f"[{client_id}] Spectral Class: {detected_type}. Time: {time.perf_counter()-t_type_start:.2f}s")
+        logger.info(f" Spectral Class: {detected_type}. Time: {time.perf_counter()-t_type_start:.2f}s")
 
         # 6. Vectorization & Compliance
         t_vec_start = time.perf_counter()
-        logger.info(f"[{client_id}] Running Vectorization & PostGIS Compliance...")
+        logger.info(f" Running Vectorization & PostGIS Compliance...")
         
         vectorize_request = {
             "raster_mask": ai_data["raster_matrix"], 
@@ -381,7 +380,7 @@ async def inference_local(
             db=get_db(), 
             detected_type=detected_type["result"] if isinstance(detected_type, dict) else detected_type
         )
-        logger.info(f"[{client_id}] Vectorization complete. Found {len(feature_collection['features'])} polygons. Time: {time.perf_counter()-t_vec_start:.2f}s")
+        logger.info(f" Vectorization complete. Found {len(feature_collection['features'])} polygons. Time: {time.perf_counter()-t_vec_start:.2f}s")
         
         # 7. Push WebSocket
         data = {
@@ -394,14 +393,16 @@ async def inference_local(
             }
         }
 
+        logger.info(f"data is {data}")
+
         # --- ENHANCED LOGGING ---
         # Calculate how many polygons are actually non-compliant
         non_compliant_count = sum(1 for f in feature_collection['features'] if not f['properties']['is_compliant'])
         
-        logger.info(f"[{client_id}] --- FINAL PAYLOAD SUMMARY ---")
-        logger.info(f"[{client_id}] Change Type: {detected_type}")
-        logger.info(f"[{client_id}] Total Polygons: {len(feature_collection['features'])}")
-        logger.info(f"[{client_id}] Non-Compliant Polygons: {non_compliant_count}")
+        logger.info(f" --- FINAL PAYLOAD SUMMARY ---")
+        logger.info(f" Change Type: {detected_type}")
+        logger.info(f" Total Polygons: {len(feature_collection['features'])}")
+        logger.info(f" Non-Compliant Polygons: {non_compliant_count}")
         
         # Log specific violations for the first few polygons to avoid log spam
         for i, feature in enumerate(feature_collection['features'][:3]):
@@ -412,14 +413,14 @@ async def inference_local(
                 for v in props['violations']:
                     logger.info(f"     ! Rule Broken: {v['rule_broken'].get('spatial_relation')} with {v['rule_broken'].get('reference_entity')}")
 
-        logger.info(f"[{client_id}] Sending data via WebSocket...")
-        await manager.send_personal_message({"event": "NEW_DETECTION", "data": data}, client_id)
+        logger.info(f" Sending data via WebSocket...")
+        await manager.broadcast_json({"event": "NEW_DETECTION", "data": data})
 
         total_time = time.perf_counter() - start_total
-        logger.info(f"[{client_id}] SUCCESS. Total Processing Time: {total_time:.2f}s")
+        logger.info(f" SUCCESS. Total Processing Time: {total_time:.2f}s")
         return {"status": "success", "processing_time": f"{total_time:.2f}s"}
 
     except Exception as e:
-        logger.error(f"[{client_id}] CRITICAL SERVER ERROR: {str(e)}")
+        logger.error(f" CRITICAL SERVER ERROR: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
