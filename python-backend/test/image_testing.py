@@ -25,7 +25,7 @@ def fetch_rgb_composite(bbox: list, time_range: str):
         collections=["sentinel-2-l2a"],
         bbox=bbox,
         datetime=time_range,
-        query={"eo:cloud_cover": {"lt": 10}}, 
+        query={"eo:cloud_cover": {"lt": 5}}, 
         sortby=[{"field": "eo:cloud_cover", "direction": "asc"}] 
     )
     
