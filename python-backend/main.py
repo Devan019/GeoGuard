@@ -5,11 +5,6 @@ from services.db_service import init_db, get_db
 
 app = FastAPI()
 
-from fastapi import FastAPI
-from api.routes import router
-from contextlib import asynccontextmanager
-from services.db_service import init_db
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
