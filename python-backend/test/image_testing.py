@@ -66,7 +66,7 @@ def fetch_rgb_composite(bbox: list, time_range: str):
 
 def main():
     # Gandhinagar region
-    bbox = [72.800, 18.965, 72.825, 18.990]
+    bbox = [72.180, 22.230, 72.220, 22.270]
     
     now = datetime.now()
     six_years_ago = now - relativedelta(years=6)
