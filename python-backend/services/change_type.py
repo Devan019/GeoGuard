@@ -15,53 +15,39 @@ def read_band_from_memory(file_bytes, target_shape=None):
                 data = dataset.read(1)
             return data.astype(np.float32)
 
-#it take all 4-4 images and get final detection type and percentage of area changed.
 def get_change_type(
-    t1_green: UploadFile = File(...), t1_red: UploadFile = File(...),
-    t1_nir: UploadFile = File(...), t1_swir: UploadFile = File(...),
-    t2_green: UploadFile = File(...), t2_red: UploadFile = File(...),
-    t2_nir: UploadFile = File(...), t2_swir: UploadFile = File(...)
+    t1_green, t1_red, t1_nir, t1_swir,
+    t2_green, t2_red, t2_nir, t2_swir
 ):
+    """Processes NumPy arrays directly to identify land-use change types."""
     try:
-        # 1. Read Time 1 Bands
-        t1_red_bytes = t1_red.file.read()
-        red_t1 = read_band_from_memory(t1_red_bytes)
-        target_shape = red_t1.shape
-
-        green_t1 = read_band_from_memory(t1_green.file.read(), target_shape)
-        nir_t1 = read_band_from_memory(t1_nir.file.read(), target_shape)
-        swir_t1 = read_band_from_memory(t1_swir.file.read(), target_shape)
-
-        # 2. Read Time 2 Bands
-        red_t2 = read_band_from_memory(t2_red.file.read(), target_shape)
-        green_t2 = read_band_from_memory(t2_green.file.read(), target_shape)
-        nir_t2 = read_band_from_memory(t2_nir.file.read(), target_shape)
-        swir_t2 = read_band_from_memory(t2_swir.file.read(), target_shape)
-
-        # 3. Spectral Math
+        # Arrays are already NumPy floats from fetch_cropped_bands
+        # 1. Spectral Math
         eps = 1e-8
-        ndvi_t1 = (nir_t1 - red_t1) / (nir_t1 + red_t1 + eps)
-        ndvi_t2 = (nir_t2 - red_t2) / (nir_t2 + red_t2 + eps)
         
-        ndwi_t1 = (green_t1 - nir_t1) / (green_t1 + nir_t1 + eps)
-        ndwi_t2 = (green_t2 - nir_t2) / (green_t2 + nir_t2 + eps)
+        # Calculate Indices
+        ndvi_t1 = (t1_nir - t1_red) / (t1_nir + t1_red + eps)
+        ndvi_t2 = (t2_nir - t2_red) / (t2_nir + t2_red + eps)
         
-        ndbi_t1 = (swir_t1 - nir_t1) / (swir_t1 + nir_t1 + eps)
-        ndbi_t2 = (swir_t2 - nir_t2) / (swir_t2 + nir_t2 + eps)
+        ndwi_t1 = (t1_green - t1_nir) / (t1_green + t1_nir + eps)
+        ndwi_t2 = (t2_green - t2_nir) / (t2_green + t2_nir + eps)
+        
+        ndbi_t1 = (t1_swir - t1_nir) / (t1_swir + t1_nir + eps)
+        ndbi_t2 = (t2_swir - t2_nir) / (t2_swir + t2_nir + eps)
 
-        # 4. Deltas
+        # 2. Deltas (Differences)
         d_ndvi = ndvi_t2 - ndvi_t1
         d_ndwi = ndwi_t2 - ndwi_t1
         d_ndbi = ndbi_t2 - ndbi_t1
 
-        # 5. Create logical masks (We separate Vegetation Loss and Growth here!)
-        mask_industrial = (d_ndvi < -0.2) & (d_ndbi >= 0.25)
-        mask_residential = (d_ndvi < -0.2) & (d_ndbi >= 0.1) & (d_ndbi < 0.25)
-        mask_veg_loss = (d_ndvi < -0.2) & (d_ndbi < 0.1)
+        # 3. Create logical masks
+        mask_industrial = (d_ndvi < -0.15) & (d_ndbi >= 0.2)
+        mask_residential = (d_ndvi < -0.15) & (d_ndbi >= 0.05) & (d_ndbi < 0.2)
+        mask_veg_loss = (d_ndvi < -0.2) & (d_ndbi < 0.05)
         mask_veg_growth = (d_ndvi > 0.2)
-        mask_waterbody = (d_ndwi > 0.2)
+        mask_waterbody = (d_ndwi > 0.15)
 
-        # 6. Count the pixels
+        # 4. Count the pixels
         counts = {
             "industrial": np.count_nonzero(mask_industrial),
             "residential": np.count_nonzero(mask_residential),
@@ -70,43 +56,38 @@ def get_change_type(
             "waterbody": np.count_nonzero(mask_waterbody)
         }
 
-        # Find the raw winner
         dominant_raw = max(counts, key=counts.get)
         dominant_count = counts[dominant_raw]
-        total_pixels = red_t1.size
+        total_pixels = t1_red.size
 
-        # 7. Map the raw winner to your exact UI strings and assign a Sentiment/Trend
-        if dominant_raw == "industrial":
-            final_result = "industrial"
-            sentiment = "growth"
-        elif dominant_raw == "residential":
-            final_result = "residential"
-            sentiment = "growth"
-        elif dominant_raw == "waterbody":
-            final_result = "waterbody"
-            sentiment = "expansion"
-        elif dominant_raw == "vegetation loss":
-            final_result = "vegetation"
-            sentiment = "loss"
-        elif dominant_raw == "vegetation growth":
-            final_result = "vegetation"
-            sentiment = "growth"
+        # 5. Result Mapping
+        mapping = {
+            "industrial": ("industrial", "growth"),
+            "residential": ("residential", "growth"),
+            "waterbody": ("waterbody", "expansion"),
+            "vegetation loss": ("vegetation", "loss"),
+            "vegetation growth": ("vegetation", "growth")
+        }
+        
+        final_result, sentiment = mapping.get(dominant_raw, ("unknown", "neutral"))
 
-        # Safety check: If less than 0.1% of the image changed
-        if (dominant_count / total_pixels) < 0.001:
-            return JSONResponse(content={
+        # 6. Area check
+        area_pct = round((dominant_count / total_pixels) * 100, 2)
+        
+        if area_pct < 0.1:
+            return {
                 "result": "no significant change",
                 "trend": "neutral",
                 "area_percentage": 0
-            })
+            }
 
-        # 8. Return the upgraded JSON!
-        return JSONResponse(content={
-            "result": final_result,      # "vegetation", "residential", etc.
-            "trend": sentiment,          # "growth", "loss", or "expansion"
-            "area_percentage": round((dominant_count / total_pixels) * 100, 2)
-        })
+        return {
+            "result": final_result,
+            "trend": sentiment,
+            "area_percentage": area_pct
+        }
 
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        # Still raise the exception to be caught by the router logger
+        raise Exception(f"Error in spectral analysis: {str(e)}")
