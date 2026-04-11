@@ -1,2 +1,19 @@
 @import "tailwindcss";
 @import "mapbox-gl/dist/mapbox-gl.css";
+
+:root {
+  --bg-primary: #02050b;
+  --text-primary: #f2f6ff;
+  --text-secondary: #9db0d0;
+}
+
+html,
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+body {
+  font-family: var(--font-space-grotesk), sans-serif;
+  text-rendering: geometricPrecision;
+}

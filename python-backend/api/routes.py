@@ -310,8 +310,8 @@ async def inference_local(
     bbox_str: str = Form(..., description='e.g., "[72.48, 23.03, 72.54, 23.08]"'),
     client_id: str = Form(...),
 
-    time1_range: str = Form("2020-01-01"),
-    time2_range: str = Form("2024-01-01")
+    time1_range: str = Form("2020-01-01/2020-03-31"),
+    time2_range: str = Form("2024-01-01/2024-03-31")
 ):
     if session is None:
         raise HTTPException(status_code=503, detail="ML Model not loaded.")
