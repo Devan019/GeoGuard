@@ -3,6 +3,8 @@
 import mapboxgl from "mapbox-gl";
 import { useEffect, useRef, useState } from "react";
 
+import { useSocket } from "@/context/SocketContext";
+
 import ComplaintUpload from "./ComplaintUpload";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -17,6 +19,23 @@ export default function MapPage() {
   const mapRef = useRef(null);
   const [status, setStatus] = useState("Requesting location permission...");
   const [isSatellite, setIsSatellite] = useState(true);
+  const { receiveMessage } = useSocket();
+
+  useEffect(() => {
+    const unsubscribe = receiveMessage("NEW_DETECTION", (payload) => {
+      console.log("Received NEW_DETECTION message:", payload);
+      if (typeof payload === "string") {
+        setStatus(payload);
+        return;
+      }
+
+      if (payload?.message) {
+        setStatus(payload.message);
+      }
+    });
+
+    return unsubscribe;
+  }, [receiveMessage]);
 
   useEffect(() => {
     if (!MAPBOX_TOKEN) {
