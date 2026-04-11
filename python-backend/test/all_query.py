@@ -10,6 +10,11 @@ def load_json(file_path):
 
 def process_rules(data):
     rules = data.get("rules", [])
+    rules = [
+        rule for rule in rules 
+        if rule['spatial_relation'] in ['intersects', 'within', 'disjoint'] 
+        or rule['threshold_value'] is not None
+    ]
 
     if not isinstance(rules, list):
         raise ValueError("'rules' must be a list")

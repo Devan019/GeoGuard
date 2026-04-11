@@ -21,12 +21,3 @@ def download_pdf(file_key: str) -> str:
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     s3.download_fileobj(BUCKET_NAME, file_key, tmp)
     return tmp.name
-
-
-def generate_upload_url():
-    url = s3.generate_presigned_url(
-        "put_object",
-        Params={"Bucket": BUCKET_NAME, "Key": "uploads/${filename}"},
-        ExpiresIn=3600,
-    )
-    return {"upload_url": url}

@@ -5,15 +5,24 @@ from services.db_service import init_db, get_db
 
 app = FastAPI()
 
+from fastapi import FastAPI
+from api.routes import router
+from contextlib import asynccontextmanager
+from services.db_service import init_db
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Starting up...")
+    # Startup logic
+    print("🚀 Starting up GeoGuard Backend...")
     init_db()
-    print("Shutting down...")
+    yield
+    # Shutdown logic
+    print("🛑 Shutting down GeoGuard Backend...")
 
-@app.on_event("startup")
-def startup():
-    init_db() 
+app = FastAPI(
+    title="Unified Satellite Change Detection API",
+    lifespan=lifespan
+)
 
 @app.get("/rules")
 def get_all_rules():
@@ -35,3 +44,4 @@ def get_all_rules():
         "rules": [r[0] for r in rows]
     }
 
+app.include_router(router)
