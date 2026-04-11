@@ -68,14 +68,14 @@ def fetch_rgb_composite(bbox: list, time_range: str):
     return rgb, date_captured
 
 def main():
-    # Gandhinagar region
-    bbox = [72.668, 23.145, 72.705, 23.185]
+    # Ahmedabad region
+    bbox = [72.675, 23.155, 72.695, 23.175]
     
     now = datetime.now()
     six_years_ago = now - relativedelta(years=6)
     
-    current_range = f"{(now - relativedelta(months=3)).strftime('%Y-%m-%d')}/{now.strftime('%Y-%m-%d')}"
-    past_range = f"{(six_years_ago - relativedelta(months=3)).strftime('%Y-%m-%d')}/{six_years_ago.strftime('%Y-%m-%d')}"
+    current_range = f"{(now - relativedelta(months=2)).strftime('%Y-%m-%d')}/{now.strftime('%Y-%m-%d')}"
+    past_range = f"{(six_years_ago - relativedelta(months=2)).strftime('%Y-%m-%d')}/{six_years_ago.strftime('%Y-%m-%d')}"
 
     output_dir = "satellite_tests"
     os.makedirs(output_dir, exist_ok=True)
