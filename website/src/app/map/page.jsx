@@ -23,7 +23,7 @@ const STYLES = {
   streets: "mapbox://styles/mapbox/light-v11",
 };
 
-const ENABLE_SAMPLE_DETECTION_ON_LOAD = false;
+const ENABLE_SAMPLE_DETECTION_ON_LOAD = true;
 
 const SAMPLE_DETECTION_PAYLOAD = {
   feature_collection: {

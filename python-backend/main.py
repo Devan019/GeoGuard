@@ -24,11 +24,7 @@ def get_all_rules():
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT value
-        FROM compliance_rules
-        CROSS JOIN LATERAL jsonb_array_elements(rules->'rules') AS value;
-    """)
+    cur.execute("SELECT rules FROM compliance_rules WHERE rules IS NOT NULL;")
 
     rows = cur.fetchall()
 
