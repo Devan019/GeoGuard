@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { uploadPdfToS3 } from "@/lib/s3";
 
 const MAX_PDF_SIZE_BYTES = 30 * 1024 * 1024;
-
-const FASTAPI_URL = "http://127.0.0.1:8000";
+const FASTAPI_URL = process.env.API_BASE || "http://localhost:8000"; 
 
 function isPdfFile(file) {
   if (!file) return false;
