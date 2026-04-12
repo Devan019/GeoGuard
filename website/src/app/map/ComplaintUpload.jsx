@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { UploadCloud, FileText, X, Loader2, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
+// Import the socket hook
+import { useSocket } from "@/context/SocketContext";
 
 export default function ComplaintUpload() {
   const [file, setFile] = useState(null);
@@ -10,7 +12,36 @@ export default function ComplaintUpload() {
   const [uploadedUrl, setUploadedUrl] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   
+  // New state to track live websocket messages
+  const [socketStatus, setSocketStatus] = useState("");
+  
   const fileInputRef = useRef(null);
+  const { receiveMessage } = useSocket();
+
+  useEffect(() => {
+    const unsubStart = receiveMessage("RULES_EXTRACTION_STARTED", (payload) => {
+      setSocketStatus(payload.message || "Rules are getting generated...");
+      setIsUploading(true);
+    });
+
+    const unsubSuccess = receiveMessage("RULES_EXTRACTION_SUCCESS", (payload) => {
+      setSocketStatus(""); 
+      setIsUploading(false); 
+      setMessage({ type: "success", text: payload.message || "Rules are generated successfully!" });
+    });
+
+    const unsubError = receiveMessage("RULES_EXTRACTION_ERROR", (payload) => {
+      setSocketStatus("");
+      setIsUploading(false);
+      setMessage({ type: "error", text: payload.message || "Failed to generate rules." });
+    });
+
+    return () => {
+      unsubStart();
+      unsubSuccess();
+      unsubError();
+    };
+  }, [receiveMessage]);
 
   async function handleUpload(event) {
     event.preventDefault();
@@ -22,6 +53,7 @@ export default function ComplaintUpload() {
 
     setIsUploading(true);
     setMessage({ type: "", text: "" });
+    setSocketStatus("Uploading document..."); // Initial status before backend takes over
     setUploadedUrl("");
 
     try {
@@ -39,13 +71,15 @@ export default function ComplaintUpload() {
         throw new Error(result.error || "Failed to process document.");
       }
 
-      setMessage({ type: "success", text: result.message || "Rules extracted successfully." });
       setUploadedUrl(result.file?.secureUrl || "");
+      
+      // Note: We DO NOT set isUploading to false here immediately.
+      // We wait for the RULES_EXTRACTION_SUCCESS websocket event to turn it off.
       setFile(null);
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Upload failed." });
-    } finally {
       setIsUploading(false);
+      setSocketStatus("");
     }
   }
 
@@ -138,7 +172,7 @@ export default function ComplaintUpload() {
       )}
 
       {/* STATUS MESSAGES */}
-      {message.text && (
+      {message.text && !isUploading && (
         <div className={`flex items-center gap-2 rounded-xl p-3 text-sm font-medium ${
           message.type === 'error' ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
         }`}>
@@ -148,7 +182,7 @@ export default function ComplaintUpload() {
       )}
 
       {/* VIEW UPLOADED FILE LINK */}
-      {uploadedUrl && (
+      {uploadedUrl && !isUploading && (
         <a
           href={uploadedUrl}
           target="_blank"
@@ -169,7 +203,7 @@ export default function ComplaintUpload() {
         {isUploading ? (
           <>
             <Loader2 size={18} className="animate-spin" />
-            Extracting Rules...
+            {socketStatus || "Extracting Rules..."}
           </>
         ) : (
           "Run Compliance Engine"

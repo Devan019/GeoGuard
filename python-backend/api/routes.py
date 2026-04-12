@@ -199,7 +199,6 @@ def analyze_separate_bands(
     t2_nir: UploadFile = File(...), t2_swir: UploadFile = File(...)
 ):
     try:
-        # 1. Read Time 1 Bands (Synchronously)
         t1_red_bytes = t1_red.file.read()
         red_t1 = read_band_from_memory(t1_red_bytes)
         target_shape = red_t1.shape
@@ -214,7 +213,7 @@ def analyze_separate_bands(
         nir_t2 = read_band_from_memory(t2_nir.file.read(), target_shape)
         swir_t2 = read_band_from_memory(t2_swir.file.read(), target_shape)
 
-        # 3. Spectral Math
+
         eps = 1e-8
         ndvi_t1 = (nir_t1 - red_t1) / (nir_t1 + red_t1 + eps)
         ndvi_t2 = (nir_t2 - red_t2) / (nir_t2 + red_t2 + eps)
@@ -223,20 +222,17 @@ def analyze_separate_bands(
         ndwi_t2 = (green_t2 - nir_t2) / (green_t2 + nir_t2 + eps)
 
         ndbi_t1 = (swir_t1 - nir_t1) / (swir_t1 + nir_t1 + eps)
-        # Fixed potential typo from original script
         ndbi_t2 = (swir_t2 - swir_t1) / (swir_t2 + swir_t1 + eps)
 
-        # 4. Deltas
         d_ndvi = ndvi_t2 - ndvi_t1
         d_ndwi = ndwi_t2 - ndwi_t1
         d_ndbi = ndbi_t2 - ndbi_t1
 
-        # 5. Logic Strategy
         change_map = np.zeros(target_shape, dtype=np.uint8)
-        change_map[(d_ndvi < -0.2) & (d_ndbi < 0.2)] = 1  # Deforestation
-        change_map[(d_ndvi < -0.2) & (d_ndbi >= 0.2)] = 2  # Urbanization
-        change_map[(d_ndwi > 0.2)] = 3                    # Flooding
-        change_map[(d_ndvi > 0.2)] = 4                    # Growth
+        change_map[(d_ndvi < -0.2) & (d_ndbi < 0.2)] = 1  
+        change_map[(d_ndvi < -0.2) & (d_ndbi >= 0.2)] = 2  
+        change_map[(d_ndwi > 0.2)] = 3                   
+        change_map[(d_ndvi > 0.2)] = 4                   
 
         # 6. Statistics Calculation
         total = change_map.size
@@ -325,6 +321,16 @@ async def inference_local(
 
     start_total = time.perf_counter()
     logger.info(f"--- Starting New Detection for Client ---")
+
+    await manager.broadcast_json({
+        "event": "PROCESSING_STARTED",
+        "message": "Image and map processing is underway. Please wait...",
+        "data": {
+            "bbox": bbox_str,
+            "time1": time1_range,
+            "time2": time2_range
+        }
+    })
 
     try:
         # 1. Parse Bbox

@@ -1,6 +1,7 @@
 import os
 import logging
 import traceback
+import asyncio
 
 from services.s3_service import download_pdf
 from services.db_service import (
@@ -10,13 +11,17 @@ from services.db_service import (
 )
 from utils.pdf_process import process_local_pdf 
 
+
 logger = logging.getLogger("uvicorn.error")
-
-
-def process_pdf_pipeline(file_key: str):
+async def process_pdf_pipeline(file_key: str):
     logger.info(f"🚀 Starting pipeline | file_key={file_key}")
-
+    
     try:
+        # await manager.broadcast_json({
+        #     "event": "RULES_EXTRACTION_STARTED",
+        #     "message": "Rules are currently getting generated. Please wait..."
+        # })
+
         # Step 1: Check if already processed
         logger.info("🔍 Checking if file already processed...")
         if is_file_processed(file_key):
@@ -36,6 +41,8 @@ def process_pdf_pipeline(file_key: str):
         # Step 3: Process PDF
         logger.info("⚙️ Processing PDF...")
         try:
+            # Assuming this is synchronous. If it's a heavy CPU task, 
+            # consider running it in a threadpool: asyncio.to_thread(process_local_pdf, pdf_path)
             rules = process_local_pdf(pdf_path)
         except Exception:
             logger.exception("❌ Error during PDF processing")
@@ -67,6 +74,10 @@ def process_pdf_pipeline(file_key: str):
             return
 
         logger.info("✅ File marked as processed")
+        # await manager.broadcast_json({
+        #     "event": "RULES_EXTRACTION_SUCCESS",
+        #     "message": "Rules are generated successfully!"
+        # })
 
         # Step 7: Cleanup
         logger.info("🧹 Cleaning up local file...")
@@ -79,3 +90,7 @@ def process_pdf_pipeline(file_key: str):
 
     except Exception:
         logger.exception(f"🔥 Pipeline crashed unexpectedly | file_key={file_key}")
+        # await manager.broadcast_json({
+        #     "event": "RULES_EXTRACTION_ERROR",
+        #     "message": "An error occurred while generating rules."
+        # })

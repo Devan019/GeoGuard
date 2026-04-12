@@ -258,14 +258,26 @@ export default function MapPage() {
   ];
 
   useEffect(() => {
-    const unsubscribe = receiveMessage("NEW_DETECTION", (payload) => {
+    // 1. Listen for the completion of the detection
+    const unsubDetection = receiveMessage("NEW_DETECTION", (payload) => {
       setDetectData({
         ...payload,
         dominant_change: normalizeDominantChange(payload),
       });
       setIsDetectionDashboardOpen(true);
+      setStatus("Detection processing complete."); 
     });
-    return unsubscribe;
+
+    // 2. Listen for the start of the processing
+    const unsubProcessing = receiveMessage("PROCESSING_STARTED", (payload) => {
+      setStatus(payload.message || "New image processing is underway. Please wait...");
+    });
+
+    // Cleanup both listeners on unmount
+    return () => {
+      unsubDetection();
+      unsubProcessing();
+    };
   }, [receiveMessage]);
 
   const fetchDetectionHistory = async () => {
