@@ -266,7 +266,7 @@ export default function MapPage() {
         dominant_change: normalizeDominantChange(payload),
       });
       setIsDetectionDashboardOpen(true);
-      setStatus("Detection processing complete."); 
+      setStatus("Detection processing complete.");
     });
 
     // 2. Listen for the start of the processing
@@ -453,9 +453,8 @@ export default function MapPage() {
             coordinates: centroid,
           },
           properties: {
-            label: `${toTitleCase(feature.properties?.detected_type || "Unknown")} CHG-${
-              feature.properties?.change_id || "-"
-            }`,
+            label: `${toTitleCase(feature.properties?.detected_type || "Unknown")} CHG-${feature.properties?.change_id || "-"
+              }`,
             reason: getRuleLabel(feature),
             changeId: feature.properties?.change_id,
           },
@@ -712,42 +711,42 @@ export default function MapPage() {
 
     const markerCandidates = features.length
       ? features
-          .slice(0, 12)
-          .map((feature) => {
-            const coords = feature?.geometry?.coordinates?.[0];
-            if (!Array.isArray(coords) || !coords.length) return null;
+        .slice(0, 12)
+        .map((feature) => {
+          const coords = feature?.geometry?.coordinates?.[0];
+          if (!Array.isArray(coords) || !coords.length) return null;
 
-            const [lng, lat] = coords[0];
-            const severity = getFeatureSeverity(feature);
-            const colorBySeverity = {
-              compliant: "#16a34a",
-              high: "#dc2626",
-              medium: "#f59e0b",
-              low: "#3b82f6",
-            };
-            const color = colorBySeverity[severity] || "#3b82f6";
-            const isCompliant = severity === "compliant";
+          const [lng, lat] = coords[0];
+          const severity = getFeatureSeverity(feature);
+          const colorBySeverity = {
+            compliant: "#16a34a",
+            high: "#dc2626",
+            medium: "#f59e0b",
+            low: "#3b82f6",
+          };
+          const color = colorBySeverity[severity] || "#3b82f6";
+          const isCompliant = severity === "compliant";
 
-            return {
-              lng,
-              lat,
-              color,
-              changeId: feature?.properties?.change_id,
-              type: feature?.properties?.detected_type,
-              isCompliant,
-            };
-          })
-          .filter(Boolean)
+          return {
+            lng,
+            lat,
+            color,
+            changeId: feature?.properties?.change_id,
+            type: feature?.properties?.detected_type,
+            isCompliant,
+          };
+        })
+        .filter(Boolean)
       : [
-          {
-            lng: AHMEDABAD_CENTER[0] + 0.008,
-            lat: AHMEDABAD_CENTER[1] + 0.006,
-            color: "#f59e0b",
-            changeId: "SAMPLE",
-            type: "waterbody",
-            isCompliant: false,
-          },
-        ];
+        {
+          lng: AHMEDABAD_CENTER[0] + 0.008,
+          lat: AHMEDABAD_CENTER[1] + 0.006,
+          color: "#f59e0b",
+          changeId: "SAMPLE",
+          type: "waterbody",
+          isCompliant: false,
+        },
+      ];
 
     markerCandidates.forEach((item) => {
       const markerEl = document.createElement("div");
