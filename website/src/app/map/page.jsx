@@ -197,6 +197,7 @@ export default function MapPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [overallLoading, setOverallLoading] = useState(false);
+  const [randomInferenceLoading, setRandomInferenceLoading] = useState(false);
 
   const dominantRaw = normalizeDominantChange(detectData);
   const dominantResult = dominantRaw?.result || "unknown";
@@ -349,6 +350,36 @@ export default function MapPage() {
       setStatus(error instanceof Error ? error.message : "Unable to build overall compliance result.");
     } finally {
       setOverallLoading(false);
+    }
+  };
+
+  const handleRunRandomDatasetInference = async () => {
+    setRandomInferenceLoading(true);
+    setStatus("Starting random dataset inference...");
+
+    try {
+      const response = await fetch("/api/detections/random-local", {
+        method: "POST",
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || "Failed to run random dataset inference.");
+      }
+
+      const sample = result?.selected_sample;
+      const location = sample?.location_name ? ` for ${sample.location_name}` : "";
+      setStatus(`Random dataset inference completed${location}.`);
+      setActiveTab("home");
+      setIsDetectionDashboardOpen(true);
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Failed to run random dataset inference.",
+      );
+    } finally {
+      setRandomInferenceLoading(false);
     }
   };
 
@@ -982,6 +1013,8 @@ export default function MapPage() {
         onTabChange={setActiveTab}
         onLoadOverall={handleLoadOverallCompliance}
         overallLoading={overallLoading}
+        onRunRandomInference={handleRunRandomDatasetInference}
+        randomInferenceLoading={randomInferenceLoading}
       />
       <UploadPanel activeTab={activeTab} />
       <StatusBadge status={status} />

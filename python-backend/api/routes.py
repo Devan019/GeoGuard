@@ -1,5 +1,7 @@
 import logging
 import time
+import random
+from pathlib import Path
 from skimage import exposure
 from services.change_type import get_change_type
 from services.connection_manager import ConnectionManager
@@ -44,6 +46,8 @@ matplotlib.use('Agg')
 
 router = APIRouter()
 manager = ConnectionManager()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATASET_JSON_PATH = PROJECT_ROOT / "satellite_images" / "dataset.json"
 
 # ==========================================
 # ML MODEL INITIALIZATION
@@ -213,7 +217,6 @@ def analyze_separate_bands(
         nir_t2 = read_band_from_memory(t2_nir.file.read(), target_shape)
         swir_t2 = read_band_from_memory(t2_swir.file.read(), target_shape)
 
-
         eps = 1e-8
         ndvi_t1 = (nir_t1 - red_t1) / (nir_t1 + red_t1 + eps)
         ndvi_t2 = (nir_t2 - red_t2) / (nir_t2 + red_t2 + eps)
@@ -229,10 +232,10 @@ def analyze_separate_bands(
         d_ndbi = ndbi_t2 - ndbi_t1
 
         change_map = np.zeros(target_shape, dtype=np.uint8)
-        change_map[(d_ndvi < -0.2) & (d_ndbi < 0.2)] = 1  
-        change_map[(d_ndvi < -0.2) & (d_ndbi >= 0.2)] = 2  
-        change_map[(d_ndwi > 0.2)] = 3                   
-        change_map[(d_ndvi > 0.2)] = 4                   
+        change_map[(d_ndvi < -0.2) & (d_ndbi < 0.2)] = 1
+        change_map[(d_ndvi < -0.2) & (d_ndbi >= 0.2)] = 2
+        change_map[(d_ndwi > 0.2)] = 3
+        change_map[(d_ndvi > 0.2)] = 4
 
         # 6. Statistics Calculation
         total = change_map.size
@@ -307,11 +310,204 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("satellite-app")
 
 
+def _load_random_dataset_sample():
+    if not DATASET_JSON_PATH.exists():
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dataset file not found at {DATASET_JSON_PATH}"
+        )
+
+    with open(DATASET_JSON_PATH, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+
+    dataset = payload.get("dataset", [])
+    if not dataset:
+        raise HTTPException(status_code=500, detail="Dataset is empty.")
+
+    sample = random.choice(dataset)
+    before = sample.get("before", {})
+    after = sample.get("after", {})
+    bbox = sample.get("bbox")
+
+    if not isinstance(bbox, list) or len(bbox) != 4:
+        raise HTTPException(
+            status_code=500, detail="Selected dataset sample has invalid bbox.")
+
+    before_path = PROJECT_ROOT / str(before.get("image_path", ""))
+    after_path = PROJECT_ROOT / str(after.get("image_path", ""))
+
+    if not before_path.exists() or not after_path.exists():
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Dataset image path missing. "
+                f"before={before_path}, after={after_path}"
+            )
+        )
+
+    with open(before_path, "rb") as f:
+        t1_bytes = f.read()
+    with open(after_path, "rb") as f:
+        t2_bytes = f.read()
+
+    return {
+        "sample": sample,
+        "t1_bytes": t1_bytes,
+        "t2_bytes": t2_bytes,
+        "bbox": bbox,
+        "time1_range": before.get("date", "2020-01-01"),
+        "time2_range": after.get("date", "2024-01-01"),
+    }
+
+
+async def _run_inference_pipeline(
+    t1_bytes: bytes,
+    t2_bytes: bytes,
+    bbox,
+    time1_range: str,
+    time2_range: str,
+    source: str = "upload",
+    selected_sample: dict | None = None,
+):
+    start_total = time.perf_counter()
+    logger.info("--- Starting New Detection for Client ---")
+
+    await manager.broadcast_json({
+        "event": "PROCESSING_STARTED",
+        "message": "Image and map processing is underway. Please wait...",
+        "data": {
+            "bbox": bbox,
+            "time1": time1_range,
+            "time2": time2_range,
+            "source": source,
+        }
+    })
+
+    t_ai_start = time.perf_counter()
+    logger.info("Running ONNX Inference...")
+    ai_data = process_ai_change_detection(t1_bytes, t2_bytes, session)
+    logger.info(
+        f"Inference complete. Max Confidence: {ai_data.get('max_confidence'):.4f}. "
+        f"Time: {time.perf_counter()-t_ai_start:.2f}s"
+    )
+
+    t_stac_start = time.perf_counter()
+    logger.info("Fetching spectral bands concurrently from AWS STAC...")
+
+    loop = asyncio.get_running_loop()
+    future1 = loop.run_in_executor(
+        None, fetch_cropped_bands_multithreaded, bbox, time1_range)
+    future2 = loop.run_in_executor(
+        None, fetch_cropped_bands_multithreaded, bbox, time2_range)
+
+    t1_bands, t2_bands = await asyncio.gather(future1, future2)
+    logger.info(
+        f"STAC Data received. Time: {time.perf_counter()-t_stac_start:.2f}s")
+
+    t_type_start = time.perf_counter()
+    dominant_type_data = get_change_type(
+        t1_green=t1_bands['green'], t1_red=t1_bands['red'], t1_nir=t1_bands['nir'], t1_swir=t1_bands['swir'],
+        t2_green=t2_bands['green'], t2_red=t2_bands['red'], t2_nir=t2_bands['nir'], t2_swir=t2_bands['swir']
+    )
+
+    dominant_type = dominant_type_data["result"] if isinstance(
+        dominant_type_data, dict) else dominant_type_data
+    logger.info(
+        f" Dominant Spectral Class: {dominant_type}. Time: {time.perf_counter()-t_type_start:.2f}s")
+
+    t_vec_start = time.perf_counter()
+    logger.info(" Running Vectorization & Dynamic PostGIS Compliance...")
+
+    vectorize_request = {
+        "raster_mask": ai_data["raster_matrix"],
+        "transform": {
+            "west": bbox[0], "north": bbox[3],
+            "xsize": (bbox[2] - bbox[0]) / 256.0,
+            "ysize": (bbox[3] - bbox[1]) / 256.0
+        },
+    }
+
+    feature_collection = await vectorize(
+        request=vectorize_request,
+        db=get_db(),
+        t2_bands=t2_bands
+    )
+    logger.info(
+        f" Vectorization complete. Found {len(feature_collection['features'])} polygons. "
+        f"Time: {time.perf_counter()-t_vec_start:.2f}s"
+    )
+
+    data = {
+        "feature_collection": feature_collection,
+        "dominant_change": dominant_type_data,
+        "ai_results": {
+            "bucket": ai_data.get("bucket"),
+            "image_keys": ai_data["image_keys"],
+            "max_confidence": ai_data.get("max_confidence")
+        }
+    }
+
+    non_compliant_count = sum(
+        1 for f in feature_collection['features'] if not f['properties']['is_compliant'])
+
+    logger.info(" --- FINAL PAYLOAD SUMMARY ---")
+    logger.info(f" Dominant Region Type: {dominant_type}")
+    logger.info(
+        f" Total Polygons Detected: {len(feature_collection['features'])}")
+    logger.info(f" Non-Compliant Polygons: {non_compliant_count}")
+
+    for i, feature in enumerate(feature_collection['features'][:3]):
+        props = feature['properties']
+        status = "❌ VIOLATION" if not props['is_compliant'] else "✅ COMPLIANT"
+        logger.info(
+            f"  -> Poly {i+1} (ID: {props['change_id']}) Type: [{props['detected_type']}]: {status}")
+        if props['violations']:
+            for v in props['violations']:
+                logger.info(
+                    f"     ! Rule Broken: {v['rule_broken'].get('spatial_relation')} "
+                    f"with {v['rule_broken'].get('reference_entity')}"
+                )
+
+    logger.info(" Sending data via WebSocket...")
+    await manager.broadcast_json({"event": "NEW_DETECTION", "data": data})
+
+    logger.info(" Persisting detection details to DB...")
+    detect_details_id = save_detection_details(
+        dominant_change=data["dominant_change"],
+        ai_results=data["ai_results"],
+        payload=data,
+    )
+    logger.info(
+        f" Detection persisted with detect_details.id={detect_details_id}")
+
+    total_time = time.perf_counter() - start_total
+    logger.info(f" SUCCESS. Total Processing Time: {total_time:.2f}s")
+
+    response_payload = {
+        "status": "success",
+        "processing_time": f"{total_time:.2f}s",
+        "detect_details_id": detect_details_id,
+        "source": source,
+    }
+
+    if selected_sample is not None:
+        response_payload["selected_sample"] = {
+            "id": selected_sample.get("id"),
+            "location_name": selected_sample.get("location_name"),
+            "bbox": selected_sample.get("bbox"),
+            "before": selected_sample.get("before"),
+            "after": selected_sample.get("after"),
+        }
+
+    return response_payload
+
+
 @router.post("/inference_local")
 async def inference_local(
     time1_image: UploadFile = File(...),
     time2_image: UploadFile = File(...),
-    bbox_str: str = Form(..., description='e.g., "[72.48, 23.03, 72.54, 23.08]"'),
+    bbox_str: str = Form(...,
+                         description='e.g., "[72.48, 23.03, 72.54, 23.08]"'),
     time1_range: str = Form("2020-01-01"),
     time2_range: str = Form("2024-01-01")
 ):
@@ -319,127 +515,57 @@ async def inference_local(
         logger.error(f" Attempted inference but ML Model is not loaded.")
         raise HTTPException(status_code=503, detail="ML Model not loaded.")
 
-    start_total = time.perf_counter()
-    logger.info(f"--- Starting New Detection for Client ---")
-
-    await manager.broadcast_json({
-        "event": "PROCESSING_STARTED",
-        "message": "Image and map processing is underway. Please wait...",
-        "data": {
-            "bbox": bbox_str,
-            "time1": time1_range,
-            "time2": time2_range
-        }
-    })
-
     try:
-        # 1. Parse Bbox
         bbox = json.loads(bbox_str)
         logger.info(f"[] Parsed BBox: {bbox}")
 
-        # 2. Read Uploaded Files
         t_read_start = time.perf_counter()
         t1_bytes = await time1_image.read()
         t2_bytes = await time2_image.read()
-        logger.info(f" File read complete ({len(t1_bytes)} bytes). Time: {time.perf_counter()-t_read_start:.2f}s")
-
-        # 3. AI Inference
-        t_ai_start = time.perf_counter()
-        logger.info(f"Running ONNX Inference...")
-        ai_data = process_ai_change_detection(t1_bytes, t2_bytes, session)
-        logger.info(f"Inference complete. Max Confidence: {ai_data.get('max_confidence'):.4f}. Time: {time.perf_counter()-t_ai_start:.2f}s")
-
-        # 4. Fetching Spectral Bands Concurrently
-        t_stac_start = time.perf_counter()
-        logger.info(f"Fetching spectral bands concurrently from AWS STAC...")
-        
-        loop = asyncio.get_running_loop()
-        future1 = loop.run_in_executor(None, fetch_cropped_bands_multithreaded, bbox, time1_range)
-        future2 = loop.run_in_executor(None, fetch_cropped_bands_multithreaded, bbox, time2_range)
-        
-        t1_bands, t2_bands = await asyncio.gather(future1, future2)
-        logger.info(f"STAC Data received. Time: {time.perf_counter()-t_stac_start:.2f}s")
-
-        # 5. Detect Dominant Change Type (For Top-Level Summary)
-        t_type_start = time.perf_counter()
-        dominant_type_data = get_change_type(
-            t1_green=t1_bands['green'], t1_red=t1_bands['red'], t1_nir=t1_bands['nir'], t1_swir=t1_bands['swir'],
-            t2_green=t2_bands['green'], t2_red=t2_bands['red'], t2_nir=t2_bands['nir'], t2_swir=t2_bands['swir']
+        logger.info(
+            f" File read complete ({len(t1_bytes)} bytes). Time: {time.perf_counter()-t_read_start:.2f}s")
+        return await _run_inference_pipeline(
+            t1_bytes=t1_bytes,
+            t2_bytes=t2_bytes,
+            bbox=bbox,
+            time1_range=time1_range,
+            time2_range=time2_range,
+            source="upload",
         )
-        
-        # Extract string if it's a dict
-        dominant_type = dominant_type_data["result"] if isinstance(dominant_type_data, dict) else dominant_type_data
-        logger.info(f" Dominant Spectral Class: {dominant_type}. Time: {time.perf_counter()-t_type_start:.2f}s")
-
-        # 6. Vectorization & Dynamic Compliance
-        t_vec_start = time.perf_counter()
-        logger.info(f" Running Vectorization & Dynamic PostGIS Compliance...")
-
-        vectorize_request = {
-            "raster_mask": ai_data["raster_matrix"],
-            "transform": {
-                "west": bbox[0], "north": bbox[3],
-                "xsize": (bbox[2] - bbox[0]) / 256.0,
-                "ysize": (bbox[3] - bbox[1]) / 256.0
-            },
-        }
-
-        # Notice we only pass request, db, and t2_bands here
-        feature_collection = await vectorize(
-            request=vectorize_request,
-            db=get_db(),
-            t2_bands=t2_bands
-        )
-        logger.info(f" Vectorization complete. Found {len(feature_collection['features'])} polygons. Time: {time.perf_counter()-t_vec_start:.2f}s")
-
-        # 7. Compile Final Data Payload
-        data = {
-            "feature_collection": feature_collection,
-            "dominant_change": dominant_type_data, 
-            "ai_results": {
-                "bucket": ai_data.get("bucket"),
-                "image_keys": ai_data["image_keys"],
-                "max_confidence": ai_data.get("max_confidence")
-            }
-        }
-
-        # --- ENHANCED LOGGING ---
-        non_compliant_count = sum(1 for f in feature_collection['features'] if not f['properties']['is_compliant'])
-
-        logger.info(f" --- FINAL PAYLOAD SUMMARY ---")
-        logger.info(f" Dominant Region Type: {dominant_type}")
-        logger.info(f" Total Polygons Detected: {len(feature_collection['features'])}")
-        logger.info(f" Non-Compliant Polygons: {non_compliant_count}")
-
-        for i, feature in enumerate(feature_collection['features'][:3]):
-            props = feature['properties']
-            status = "❌ VIOLATION" if not props['is_compliant'] else "✅ COMPLIANT"
-            logger.info(f"  -> Poly {i+1} (ID: {props['change_id']}) Type: [{props['detected_type']}]: {status}")
-            if props['violations']:
-                for v in props['violations']:
-                    logger.info(f"     ! Rule Broken: {v['rule_broken'].get('spatial_relation')} with {v['rule_broken'].get('reference_entity')}")
-
-        logger.info(f" Sending data via WebSocket...")
-        await manager.broadcast_json({"event": "NEW_DETECTION", "data": data})
-
-        logger.info(" Persisting detection details to DB...")
-        detect_details_id = save_detection_details(
-            dominant_change=data["dominant_change"],
-            ai_results=data["ai_results"],
-            payload=data,
-        )
-        logger.info(f" Detection persisted with detect_details.id={detect_details_id}")
-
-        total_time = time.perf_counter() - start_total
-        logger.info(f" SUCCESS. Total Processing Time: {total_time:.2f}s")
-        return {
-            "status": "success",
-            "processing_time": f"{total_time:.2f}s",
-            "detect_details_id": detect_details_id,
-        }
 
     except Exception as e:
         logger.error(f" CRITICAL SERVER ERROR: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/inference_local_random_dataset")
+async def inference_local_random_dataset():
+    if session is None:
+        logger.error(
+            " Attempted random dataset inference but ML Model is not loaded.")
+        raise HTTPException(status_code=503, detail="ML Model not loaded.")
+
+    try:
+        dataset_payload = _load_random_dataset_sample()
+        sample = dataset_payload["sample"]
+        logger.info(
+            f" Using random dataset sample id={sample.get('id')} "
+            f"location={sample.get('location_name')}"
+        )
+
+        return await _run_inference_pipeline(
+            t1_bytes=dataset_payload["t1_bytes"],
+            t2_bytes=dataset_payload["t2_bytes"],
+            bbox=dataset_payload["bbox"],
+            time1_range=dataset_payload["time1_range"],
+            time2_range=dataset_payload["time2_range"],
+            source="random_dataset",
+            selected_sample=sample,
+        )
+
+    except Exception as e:
+        logger.error(f" RANDOM DATASET INFERENCE ERROR: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
