@@ -1,11 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import PrismaClient from '@/lib/prisma'
 import { NextResponse } from 'next/server';
 
-const prisma = new PrismaClient();
 
 export async function GET() {
   try {
-    const ruleRecord = await prisma.compliance_rules.findFirst({
+    const ruleRecord = await PrismaClient.compliance_rules.findFirst({
       orderBy: {
         created_at: 'asc',
       },

@@ -1,51 +1,70 @@
 # GeoGuard
 
-GeoGuard is a geospatial analytics platform designed to automate land use monitoring and urban expansion tracking. By combining deep learning-based satellite change detection with a dynamic spatial compliance engine, the system identifies unauthorized construction, environmental encroachments, and zoning violations to assist municipal authorities.
+GeoGuard is an end-to-end geospatial intelligence platform for satellite change detection, rule-based compliance checking, and investigation workflows. It combines AI segmentation, PostGIS spatial analysis, complaint-document rule extraction, and an interactive map dashboard.
 
-## Project Overview
+## What This Repository Includes
 
-Rapid urbanization outpaces manual monitoring capabilities. GeoGuard addresses this by processing multi-temporal satellite imagery (spanning a 6-year period) to detect physical changes and automatically validating those changes against government zoning regulations extracted directly from legal documents.
+### 1. Python backend (`python-backend`)
+- FastAPI service for AI inference, raster-to-vector conversion, compliance checks, and websocket updates.
+- ONNX-based change detection pipeline (`best_siamese_unet.onnx`).
+- Planetary Computer/STAC band fetching and spectral index analysis.
+- Rule extraction pipeline from uploaded PDF documents.
+- Postgres persistence for extracted rules, detection runs, and violation records.
 
-## Key Features
+### 2. Next.js web app (`website`)
+- Landing experience and geospatial monitoring dashboard.
+- Mapbox-powered map UI for detections and violations.
+- Complaint PDF upload flow with S3 storage.
+- Detection history and overall analytics APIs.
+- Compliance report PDF generation API.
 
-* **Deep Learning Change Detection:** Utilizes transfer learning models to compare historical and current satellite imagery, identifying new constructions, vegetation loss, and infrastructural changes.
-* **Automated Rule Extraction:** An LLM-powered pipeline that ingests government PDFs (building codes, zoning laws) and translates legal text into strict, machine-readable JSON spatial rules.
-* **Dynamic Spatial Query Engine:** A backend interpreter that converts structured JSON compliance rules into optimized PostGIS spatial queries on the fly.
-* **Interactive Dashboard:** A web-based mapping interface to visualize detected changes, overlay vector data (zones, water bodies), and highlight specific rule violations.
-* **Compliance Reporting:** Automated generation of downloadable PDF reports detailing specific violations, including before/after imagery and calculated violation metrics (e.g., exact distance of encroachment).
+### 3. Geospatial and test assets
+- Sample GeoJSON layers in `website/src/data`.
+- Satellite image assets and tests in `python-backend/satellite_images` and `python-backend/test`.
 
-## Technology Stack
+## Core Functionalities
 
-### Frontend
-* **Framework:** Next.js
-* **Styling:** Tailwind CSS
-* **Mapping:** Leaflet / Mapbox GL
+### AI change detection
+- Accepts two time-separated satellite images and predicts change masks.
+- Produces confidence outputs and generated change-map artifacts.
+- Supports local inference orchestration that combines AI output with spectral and spatial logic.
 
-### Backend & AI
-* **API Framework:** FastAPI (Python)
-* **Database:** PostgreSQL with PostGIS extension
-* **Geospatial Processing:** Rasterio, GDAL
-* **Machine Learning:** PyTorch / TensorFlow (Transfer Learning for Change Detection)
-* **LLM Integration:** Groq API (Llama-3 models) for PDF rule extraction
+### Spectral analysis and dominant change typing
+- Computes NDVI, NDWI, and NDBI deltas from multi-band inputs.
+- Classifies dominant trend categories such as urban expansion, vegetation change, and water-related changes.
 
-## The Compliance Rule Engine
+### Raster-to-vector and compliance engine
+- Converts raster masks to vector polygons.
+- Evaluates each detected polygon against dynamic compliance rules stored in Postgres.
+- Uses PostGIS operators and distance/area predicates.
 
-At the core of GeoGuard is a dynamic spatial rule interpreter. Government regulations are parsed into a strict JSON schema stored in a `jsonb` column, allowing the system to instantly evaluate new land-use changes against topological constraints.
+### Complaint PDF to machine-readable spatial rules
+- Uploads complaint/legal PDF files to S3.
+- Triggers asynchronous extraction pipeline in FastAPI.
+- Uses LLM parsing to convert legal text into normalized JSON spatial rules.
+- Stores processed-file state to avoid duplicate reprocessing.
 
-### Supported Entities
-The system normalizes all spatial features into four core categories to ensure reliable ML detection and database querying:
-1. `waterbody` (rivers, lakes, wetlands)
-2. `vegetation` (forests, parks, green belts)
-3. `residential` (housing, townships, schools)
-4. `industrial` (factories, infrastructure, roads)
+### Live updates and reporting
+- WebSocket endpoint for detection progress and result broadcasting.
+- Detection history and aggregated overview APIs for the dashboard.
+- Compliance PDF report generator with summary, violations, and images.
 
-### Supported Spatial Relations
-The engine dynamically generates PostGIS logic for the following relations:
-* **Topological:** `intersects`, `within`, `disjoint`
-* **Proximity:** `min_distance`, `max_distance` (measured in meters)
-* **Attribute:** `min_area`, `max_area` (measured in square meters)
+## Compliance Rule Engine
 
-### Example Rule Schema
+Rules are stored in JSON/JSONB and translated into dynamic PostGIS SQL at runtime.
+
+### Supported entities
+1. `waterbody`
+2. `vegetation`
+3. `residential`
+4. `industrial`
+
+### Supported spatial relations
+- Topological: `intersects`, `within`, `disjoint`
+- Proximity: `min_distance`, `max_distance` (meters)
+- Attribute-based: `min_area`, `max_area` (sq meters)
+
+### Example rule
 ```json
 {
   "target_entity": "industrial",
@@ -56,57 +75,126 @@ The engine dynamically generates PostGIS logic for the following relations:
 }
 ```
 
+## API Surface Summary
+
+### Python backend (FastAPI)
+- `GET /rules`: fetch extracted compliance rules.
+- `POST /pdf-uploaded`: queue PDF extraction pipeline.
+- `POST /predict_change`: model inference on two images.
+- `POST /gen_analyze_bands`: generate cropped band analysis inputs.
+- `POST /analyze_separate_bands`: spectral change map generation.
+- `POST /analyze_separate_bands_final`: dominant change classification.
+- `POST /api/raster-to-vector`: raster mask to vector polygons.
+- `POST /inference_local`: full pipeline (AI + vectorization + compliance + persistence + websocket broadcast).
+- `GET /test`: test websocket broadcast.
+- `WS /ws/ai-detections/{client_id}`: live event channel.
+
+### Website (Next.js route handlers)
+- `POST /api/complice`: upload complaint PDF to S3 and notify FastAPI.
+- `POST /api/s3/signed-urls`: generate signed S3 object URLs.
+- `GET /api/detections/history`: fetch recent detection runs.
+- `GET /api/detections/overall`: fetch aggregated compliance summary.
+- `POST /api/detections/report-pdf`: generate downloadable compliance report PDF.
+- Seed utilities under `website/src/app/api/scripts/seed/*` for zone/water/vegetation/residential data import.
+
+## Tech Stack
+
+### Frontend
+- Next.js (App Router)
+- React
+- Mapbox GL
+- Prisma Client
+
+### Backend and AI
+- FastAPI
+- ONNX Runtime
+- Rasterio, NumPy, Pillow, scikit-image, Matplotlib
+- Pystac Client + Planetary Computer
+- PostgreSQL + PostGIS
+- boto3 (S3)
+- OpenAI-compatible client against Groq API (Llama models)
+
 ## Getting Started
 
 ### Prerequisites
-* Node.js (v18+)
-* Python (3.9+)
-* PostgreSQL with PostGIS extension enabled
+- Docker Desktop (recommended for backend)
+- Node.js 18+
+- PostgreSQL with PostGIS enabled
+- AWS S3 bucket and credentials
+- Mapbox token
 
-### Installation
+### 1. Clone repository
+```bash
+git clone https://github.com/Devan019/GeoGuard.git
+cd GeoGuard
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Devan019/GeoGuard.git
-   cd GeoGuard
-   ```
+### 2. Python Setup (Docker)
+Create `python-backend/.env` with at least:
+- `DATABASE_URL`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
+- `AWS_S3_BUCKET_NAME`
+- `GROK_API_KEY`
 
-2. **Backend Setup**
-   Navigate to the backend directory, create a virtual environment, and install dependencies:
-   ```bash
-   cd backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-   Set up your `.env` file with database credentials and API keys (e.g., Groq API), then start the server:
-   ```bash
-   uvicorn main:app --reload
-   ```
+Build and run:
+```bash
+cd python-backend
+docker build -t geoguard-backend .
+docker run --rm -p 8000:8000 --env-file .env geoguard-backend
+```
 
-3. **Frontend Setup**
-   Navigate to the frontend directory, install packages, and run the development server:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
+Backend will be available at `http://127.0.0.1:8000`.
 
-## Project Structure
+### 3. Website Setup
+Create `website/.env` with at least:
+- `DATABASE_URL`
+- `NEXT_PUBLIC_MAPBOX_TOKEN`
+- `NEXT_PUBLIC_SOCKET_URL` (example: `ws://127.0.0.1:8000/ws/ai-detections`)
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
+- `AWS_S3_BUCKET_NAME`
+- `AWS_S3_COMPLAINTS_PREFIX` (optional)
+
+Install and run:
+```bash
+cd website
+npm install
+npm run dev
+```
+
+Website will run at `http://localhost:3000`.
+
+## Data and Database Notes
+
+- Prisma schema is located at `website/prisma/schema.prisma`.
+- Detection runs persist in `detect_details` and `rule_violations`.
+- Rule extraction stores JSON rules in `compliance_rules`.
+- Processed complaint files are tracked in `processed_files`.
+
+## Repository Structure
 
 ```text
-├── backend/
-│   ├── api/            # FastAPI routes
-│   ├── core/           # PostGIS query generator and compliance logic
-│   ├── models/         # ML change detection architecture
-│   └── scripts/        # LLM PDF extraction scripts
-├── frontend/
-│   ├── components/     # UI and map components
-│   └── pages/          # Next.js application routes
-├── data/               # Vector shapefiles and sample PDFs
+GeoGuard/
+├── python-backend/
+│   ├── api/                     # FastAPI routes and websocket endpoints
+│   ├── services/                # DB, PDF, STAC, inference, vectorization services
+│   ├── models/                  # Request/response schemas
+│   ├── utils/                   # PDF processing helpers
+│   ├── test/                    # Backend test and utility scripts
+│   ├── Dockerfile
+│   └── main.py
+├── website/
+│   ├── src/app/                 # Next.js app routes and map UI
+│   ├── src/app/api/             # Web APIs for uploads, detections, reports, seeding
+│   ├── src/context/             # Websocket provider
+│   ├── src/lib/                 # Prisma and S3 clients
+│   └── prisma/                  # Prisma schema
 └── README.md
 ```
 
 ## License
 
-This project is developed for the Satellite Imagery Change Detection challenge. Licensed under the MIT License.
+Developed for the Satellite Imagery Change Detection challenge. Licensed under the MIT License.
