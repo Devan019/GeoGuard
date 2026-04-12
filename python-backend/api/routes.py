@@ -33,7 +33,7 @@ from rasterio.io import MemoryFile
 from rasterio.enums import Resampling
 import pystac_client
 import planetary_computer
-
+from services.connection_manager import manager
 from services.db_service import get_db, save_detection_details
 from services.inference_helper import process_ai_change_detection
 
@@ -45,7 +45,7 @@ matplotlib.use('Agg')
 
 
 router = APIRouter()
-manager = ConnectionManager()
+# manager = ConnectionManager()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATASET_JSON_PATH = PROJECT_ROOT / "satellite_images" / "dataset.json"
 
@@ -374,7 +374,6 @@ async def _run_inference_pipeline(
 
     await manager.broadcast_json({
         "event": "PROCESSING_STARTED",
-        "message": "Image and map processing is underway. Please wait...",
         "data": {
             "bbox": bbox,
             "time1": time1_range,
