@@ -49,6 +49,23 @@ GeoGuard is an end-to-end geospatial intelligence platform for satellite change 
 - Detection history and aggregated overview APIs for the dashboard.
 - Compliance PDF report generator with summary, violations, and images.
 
+## UI Preview
+
+### 1. Detection Map View
+The primary map interface showing detected change polygons, compliance labels, and geospatial context over satellite imagery.
+
+![GeoGuard Detection Map](./detection-map.png)
+
+### 2. Multi-Style Map Modes
+Street/satellite mode switching for better visual analysis of compliance markers and surrounding road/building topology.
+
+![GeoGuard Map Style Modes](./mode-map.png)
+
+### 3. AI Detection Dashboard
+Detailed run-level dashboard with before/after imagery, heatmap and mask outputs, dominant change insights, and compliance severity summary.
+
+![GeoGuard AI Detection Dashboard](./ai_detection.png)
+
 ## Compliance Rule Engine
 
 Rules are stored in JSON/JSONB and translated into dynamic PostGIS SQL at runtime.
