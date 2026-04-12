@@ -31,3 +31,4 @@ class ConnectionManager:
         else:
             print(f"Warning: Client {client_id} is not connected.")
 
+manager = ConnectionManager()

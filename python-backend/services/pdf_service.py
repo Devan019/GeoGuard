@@ -10,6 +10,7 @@ from services.db_service import (
     insert_rules
 )
 from utils.pdf_process import process_local_pdf 
+from services.connection_manager import manager
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -17,10 +18,10 @@ async def process_pdf_pipeline(file_key: str):
     logger.info(f"🚀 Starting pipeline | file_key={file_key}")
     
     try:
-        # await manager.broadcast_json({
-        #     "event": "RULES_EXTRACTION_STARTED",
-        #     "message": "Rules are currently getting generated. Please wait..."
-        # })
+        await manager.broadcast_json({
+            "event": "RULES_EXTRACTION_STARTED",
+            "data": "Rules are currently getting generated. Please wait..."
+        })
 
         # Step 1: Check if already processed
         logger.info("🔍 Checking if file already processed...")
@@ -74,10 +75,10 @@ async def process_pdf_pipeline(file_key: str):
             return
 
         logger.info("✅ File marked as processed")
-        # await manager.broadcast_json({
-        #     "event": "RULES_EXTRACTION_SUCCESS",
-        #     "message": "Rules are generated successfully!"
-        # })
+        await manager.broadcast_json({
+            "event": "RULES_EXTRACTION_SUCCESS",
+            "data": "Rules are generated successfully!"
+        })
 
         # Step 7: Cleanup
         logger.info("🧹 Cleaning up local file...")
@@ -90,7 +91,7 @@ async def process_pdf_pipeline(file_key: str):
 
     except Exception:
         logger.exception(f"🔥 Pipeline crashed unexpectedly | file_key={file_key}")
-        # await manager.broadcast_json({
-        #     "event": "RULES_EXTRACTION_ERROR",
-        #     "message": "An error occurred while generating rules."
-        # })
+        await manager.broadcast_json({
+            "event": "RULES_EXTRACTION_ERROR",
+            "data": "An error occurred while generating rules."
+        })

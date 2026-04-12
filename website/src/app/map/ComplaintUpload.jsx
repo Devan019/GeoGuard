@@ -16,24 +16,25 @@ export default function ComplaintUpload() {
   const [socketStatus, setSocketStatus] = useState("");
   
   const fileInputRef = useRef(null);
-  const { receiveMessage } = useSocket();
+  const { receiveMessage } = useSocket(); // Make sure to extract clientId here if you are using send_personal_message on the backend!
 
   useEffect(() => {
+    // payload is now directly the string you sent in the "data" key
     const unsubStart = receiveMessage("RULES_EXTRACTION_STARTED", (payload) => {
-      setSocketStatus(payload.message || "Rules are getting generated...");
+      setSocketStatus(payload || "Rules are getting generated...");
       setIsUploading(true);
     });
 
     const unsubSuccess = receiveMessage("RULES_EXTRACTION_SUCCESS", (payload) => {
       setSocketStatus(""); 
       setIsUploading(false); 
-      setMessage({ type: "success", text: payload.message || "Rules are generated successfully!" });
+      setMessage({ type: "success", text: payload || "Rules are generated successfully!" });
     });
 
     const unsubError = receiveMessage("RULES_EXTRACTION_ERROR", (payload) => {
       setSocketStatus("");
       setIsUploading(false);
-      setMessage({ type: "error", text: payload.message || "Failed to generate rules." });
+      setMessage({ type: "error", text: payload || "Failed to generate rules." });
     });
 
     return () => {
@@ -59,6 +60,9 @@ export default function ComplaintUpload() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      
+      // If you switch back to send_personal_message, remember to append your client_id here:
+      // formData.append("client_id", clientId);
 
       const response = await fetch("/api/complice", {
         method: "POST",
